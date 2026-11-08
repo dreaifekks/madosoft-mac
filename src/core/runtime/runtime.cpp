@@ -2965,7 +2965,9 @@ bool App::Impl::boot()
     const bool is_dir = std::filesystem::is_directory(path, ec);
     std::shared_ptr<const oa::fs::IFileSystem> fs;
     try {
-        fs = std::make_shared<oa::fs::PhysFileSystem>(path);
+        fs = std::make_shared<oa::fs::PhysFileSystem>(path, true, cfg.overlays);
+        for (const std::string& o : cfg.overlays)
+            std::printf("[app] overlay: %s\n", o.c_str());
         if (is_dir) {
             std::printf("[app] folder project: %s\n", path.c_str());
         } else if (std::strcmp(fs->kind(), "pfs") == 0) {

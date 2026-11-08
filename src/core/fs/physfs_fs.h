@@ -76,8 +76,10 @@ private:
 
 class PhysFileSystem final : public IFileSystem {
 public:
-    /// Mount one project source.
-    explicit PhysFileSystem(std::string source_path, bool sidecar_dir = true);
+    /// Mount one project source. `overlays` (a .pfs file or a directory
+    /// each) are mounted above it in order: the last one wins.
+    explicit PhysFileSystem(std::string source_path, bool sidecar_dir = true,
+                            const std::vector<std::string>& overlays = {});
 
     ~PhysFileSystem() override;
 

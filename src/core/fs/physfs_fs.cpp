@@ -918,7 +918,8 @@ struct PhysFileSystem::Impl {
     }
 };
 
-PhysFileSystem::PhysFileSystem(std::string source_path, bool sidecar_dir)
+PhysFileSystem::PhysFileSystem(std::string source_path, bool sidecar_dir,
+                               const std::vector<std::string>& overlays)
     : d_(new Impl()) {
     while (source_path.size() > 1 &&
            (source_path.back() == '/' || source_path.back() == '\\')) {
@@ -956,6 +957,18 @@ PhysFileSystem::PhysFileSystem(std::string source_path, bool sidecar_dir)
                 // search-path priority).
                 if (!adopted) d_->adopt_or_mount_dir(parent);
                 d_->kind = "pfs+dir";
+            }
+        }
+        for (const std::string& overlay : overlays) {
+            std::error_code oec;
+            if (sfs::is_directory(overlay, oec)) {
+                if (!PHYSFS_mount(overlay.c_str(), d_->mp.c_str(), 0))
+                    throw std::runtime_error("cannot mount overlay " + overlay + ": " +
+                                             physfs_error());
+                d_->mounted.push_back(overlay);
+            } else {
+                for (const auto& container : plan_pfs_source(overlay).containers)
+                    d_->mount_pfs_container(container, /*prepend=*/true);
             }
         }
     } catch (...) {

@@ -60,6 +60,8 @@ void print_usage(const char* argv0)
         "  --platform NAME      project platform (default: build OS)\n"
         "  --renderer NAME      'sdl' (default) or 'gles'\n"
         "  --mute               mute audio\n"
+        "  --overlay PATH       mount a .pfs or directory above the project\n"
+        "                       (repeatable, the last one wins)\n"
         "  -h, --help           show this help\n"
         "\n"
         "env:\n"
@@ -148,6 +150,10 @@ int parse_args(int argc, char** argv, oa::runtime::AppConfig& cfg)
             std::string v;
             if (!value_of(v) || v.empty()) return usage_error("--platform needs a name");
             cfg.platform = v;
+        } else if (name == "--overlay") {
+            std::string v;
+            if (!value_of(v) || v.empty()) return usage_error("--overlay needs a path");
+            cfg.overlays.push_back(v);
         } else if (name == "--renderer") {
             std::string v;
             if (!value_of(v) || v.empty()) return usage_error("--renderer needs a name");

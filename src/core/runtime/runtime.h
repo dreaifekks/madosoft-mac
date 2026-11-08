@@ -4,12 +4,14 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace oa::runtime {
 
 /// Host boot settings (CLI parsing and platform policy stay in main.cpp).
 struct AppConfig {
     std::string project;               // .pfs archive or extracted project dir
+    std::vector<std::string> overlays; // .pfs files / dirs mounted above it (last wins)
     std::string save_root;             // host-chosen writable save directory
     std::string platform = "windows";  // system.ini section / script os var
     std::string renderer = "sdl";      // "sdl" or "gles"
