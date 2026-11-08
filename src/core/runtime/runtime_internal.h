@@ -361,6 +361,7 @@ struct GameRuntime::RuntimeState {
     /// Hit test → hover diff → click/drag/push; reports claimed edges.
     struct PointerConsumption {
         bool layer_handled = false;   // a click-handler row dispatched
+        bool click_queued = false;    // this left press's click or push-1 row queued tags
         bool drag_handled = false;    // a drag chain ran on this edge
         bool left_push_handled = false; // global push key 1 dispatch handled
         bool role_advance = false;    // a keyconfig role-0 key was pressed
@@ -368,16 +369,17 @@ struct GameRuntime::RuntimeState {
     };
     PointerConsumption process_pointer_input(const oa::runtime::FrameInput& in);
     /// Run one registered row through filter + calllua; true = handled.
+    /// `queued` (optional) reports whether the row queued tags: its function's, or its jump/call.
     /// row 按值传：下面的 Lua 回调可以重新注册/删除 handler，寄存器里的
     /// 那一行随时会失效（fuzz 抓到的 heap-use-after-free）。
     bool dispatch_layer_row(const std::string& id, oa::render::LayerEventHandler row,
                             const std::string& event_type,
                             const std::vector<std::pair<std::string, std::string>>& runtime_params,
-                            PointerDispatch::Kind kind);
+                            PointerDispatch::Kind kind, bool* queued = nullptr);
     bool dispatch_input_row(const std::string& filter_name,
                             oa::render::InputHandler row,
                             const std::vector<std::pair<std::string, std::string>>& runtime_params,
-                            PointerDispatch::Kind kind);
+                            PointerDispatch::Kind kind, bool* queued = nullptr);
     /// drag begin/continue/finish.
     bool drag_begin(const std::string& layer_id, bool forced);
     void drag_update(double mx, double my);

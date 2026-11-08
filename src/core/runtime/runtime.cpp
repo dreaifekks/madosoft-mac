@@ -865,9 +865,7 @@ void GameRuntime::RuntimeState::tick(uint64_t delta_ms, const FrameInput& in) {
     control_.skip_active_ = skip_active();
 
     // Pointer chain runs before wait resolution; claimed clicks are swallowed.
-    const size_t queued_before = interpreter_ ? interpreter_->queued_tag_count() : 0;
     const PointerConsumption pc = process_pointer_input(eff);
-    const bool handler_queued = interpreter_ && interpreter_->queued_tag_count() > queued_before;
 
     // clicked = physical left-down not consumed by layer/drag/push (and not
     // swallowed by a hide-mode click recovery) || legacy Enter/Space role-0
@@ -880,10 +878,13 @@ void GameRuntime::RuntimeState::tick(uint64_t delta_ms, const FrameInput& in) {
         const bool push_absorbs = pc.left_push_handled && !click_wait;
         clicked = !pc.input_swallowed && !pc.layer_handled && !pc.drag_handled &&
                   !push_absorbs;
-        // A button whose handler queued tags (dialog YES: close + load) while
-        // the script sits on a queue-armed click park must release that park
-        // the way Enter does; otherwise the queue behind it never drains.
-        if (handler_queued && wait_ && wait_->waiting_click() &&
+        // Enter on a dialog: its push row queues the close tags and the press
+        // counts as a click, which releases the queue-armed click park the
+        // dialog waits on. A mouse press takes the same path only when its own
+        // click handlers (its click row, or push key 1) queued tags; hover,
+        // rollout, drag and other keys' push rows never count. Otherwise the
+        // queue behind the park never drains.
+        if (pc.click_queued && wait_ && wait_->waiting_click() &&
             interpreter_->last_wait_from_queue())
             clicked = true;
     } else {
@@ -2023,8 +2024,10 @@ GameRuntime::RuntimeState::PointerConsumption GameRuntime::RuntimeState::process
             for (const std::string& id : dispatch_list(interactive, "click")) {
                 const auto* row = scene().find_event_handler(id, "click");
                 if (!row) continue;
+                bool queued = false;
                 pc.layer_handled |= dispatch_layer_row(
-                    id, *row, "click", {{"click", "1"}}, PointerDispatch::Kind::Click);
+                    id, *row, "click", {{"click", "1"}}, PointerDispatch::Kind::Click, &queued);
+                pc.click_queued |= queued;
             }
         }
     }
@@ -2066,10 +2069,15 @@ GameRuntime::RuntimeState::PointerConsumption GameRuntime::RuntimeState::process
             continue;
         }
         const std::string event_type = is_mouse_button_key(key) ? "click" : "key";
+        bool queued = false;
         const bool handled = dispatch_input_row(
             "setonpush", *row,
-            {{"key", key_string}, {"type", event_type}}, PointerDispatch::Kind::Push);
+            {{"key", key_string}, {"type", event_type}}, PointerDispatch::Kind::Push, &queued);
         if (key == kKeyMouseLeft && handled) pc.left_push_handled = true;
+        // The left press's own push row is one of its click handlers: the
+        // framework's button click row only marks the button, and the push row
+        // runs the action (dialog YES), as push key 13 does for Enter.
+        if (key == kKeyMouseLeft && queued) pc.click_queued = true;
         // Cancel press also runs the push row so flg.keycode is recorded.
         if (cancel_park) pc.role_advance = true;
     }
@@ -2086,7 +2094,7 @@ bool GameRuntime::RuntimeState::dispatch_layer_row(
     const std::string& id, oa::render::LayerEventHandler row,
     const std::string& event_type,
     const std::vector<std::pair<std::string, std::string>>& runtime_params,
-    PointerDispatch::Kind kind) {
+    PointerDispatch::Kind kind, bool* queued_out) {
     (void)event_type;
     if (!row.enabled) return false;
     // e:setEventFilter consult: 1 = script claims it, 2 = pretend failure.
@@ -2150,13 +2158,14 @@ bool GameRuntime::RuntimeState::dispatch_layer_row(
         row.label.empty() && fn_queued) {
         begin_inline_event_frame(true);
     }
+    if (queued_out) *queued_out = fn_queued || !row.file.empty() || !row.label.empty();
     return handled;
 }
 
 bool GameRuntime::RuntimeState::dispatch_input_row(
     const std::string& filter_name, oa::render::InputHandler row,
     const std::vector<std::pair<std::string, std::string>>& runtime_params,
-    PointerDispatch::Kind kind) {
+    PointerDispatch::Kind kind, bool* queued_out) {
     const auto verdict = interpreter_->lua_bridge().run_event_filter(filter_name, row.filter_params);
     if (verdict == 2) return false;
     if (verdict == 1) return true;
@@ -2195,6 +2204,7 @@ bool GameRuntime::RuntimeState::dispatch_input_row(
         row.label.empty() && fn_queued) {
         begin_inline_event_frame(true);
     }
+    if (queued_out) *queued_out = fn_queued || !row.file.empty() || !row.label.empty();
     return handled;
 }
 
