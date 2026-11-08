@@ -87,6 +87,7 @@ cmake -S . -B build/windows -DOA_ENABLE_TESTS=ON \
 | `OA_SCENEDUMP` | 按 id 前缀转储场景节点（`id left top w h vis alpha eff file`），`""` = 全部。核对"某层到底在不在/位置对不对" | `src/core/runtime/runtime.cpp` |
 | `OA_VARDUMP` | 结束前按前缀导出引擎变量表（local/temp/global/system），`""` = 全部 | 同上 |
 | `OA_TXTDUMP` | 转储每个消息层（`chars/reveal/pending/hidden/positioned/page/alpha/vis/box/size/align/sample`）。区分"文本没派发进来"（全层 `chars=0`）与"进了错的层/没定位" | 同上 |
+| `OA_AUDIO_MIXDIAG` | 每次 SE/语音开始时打印 `[mixdiag] se play id=… file=…`，并按时间桶打印总线电平（bgm/se/voice 的 rms/peak/增益）；`OA_AUDIO_MIXDIAG_MS` 改桶长（毫秒）。无耳机环境下证明声音在出 | `src/core/media/audio.cpp` |
 | `OA_PLAN_REUSE` | 帧计划复用开关（默认开）。计划按"层容器版本 + 文本版本 + 全局淡出 + stage 尺寸"缓存；宿主供帧不失效计划。`=0` 强制每帧重建，用于定位"复用门漏失效信号"（A/B：同帧开/关比像素与 `[scene]`） | `src/core/render/renderer.cpp` |
 
 ### D. 探针 / 工具的旋钮（非 ctest，report-only）
@@ -98,6 +99,7 @@ cmake -S . -B build/windows -DOA_ENABLE_TESTS=ON \
 | `OA_BT91_*`（`PAGES` / `PRE` / `KEY` / `LOAD` / `LUABLOG` / `F8TICKS` / `SAVE` / `PFS` / `NOF8` / `DBGKEYS` / `LUABLOG_IMMED`） | `tests/fpm/bt91_backlog_face_probe.cpp`（backlog 行头像几何/世界 AABB） |
 | `OA_SELDEEP` / `OA_P2DEEP` / `OA_P2TRACE` / `OA_SELBACK*` / `OA_SELDBL*` / `OA_LOG_ALL_PAGES` / `OA_DUMP_EMOTE_PAGE` / `OA_DUMP_EMOTE_LATE` / `OA_TEST_STORE_DIR` | `tests/fpm/nekomiko_p0_test.cpp`（深跑/选择支/表情帧导出） |
 | `OA_PERF_DUMP` | `tests/fpm/emote_perf_probe.cpp` |
+| `OA_DRIVE_SCRIPT` | `src/app/drive.cpp`（`openartemis_drive` 的输入脚本：点击/按键/等待/存帧，命令表见文件头） |
 | `OA_MEM_NOPUMP` / `OA_MEM_GPU` | `tests/fpm/mem_churn_probe.cpp` |
 | `OA_VPROBE_FRAMES` | `tests/fpm/video_perf_probe.cpp` |
 | `OA_ES_PAGES` / `OA_ES_SAVE` | `tests/fpm/emote_state_probe.cpp` |
