@@ -865,7 +865,9 @@ void GameRuntime::RuntimeState::tick(uint64_t delta_ms, const FrameInput& in) {
     control_.skip_active_ = skip_active();
 
     // Pointer chain runs before wait resolution; claimed clicks are swallowed.
+    const size_t queued_before = interpreter_ ? interpreter_->queued_tag_count() : 0;
     const PointerConsumption pc = process_pointer_input(eff);
+    const bool handler_queued = interpreter_ && interpreter_->queued_tag_count() > queued_before;
 
     // clicked = physical left-down not consumed by layer/drag/push (and not
     // swallowed by a hide-mode click recovery) || legacy Enter/Space role-0
@@ -878,6 +880,12 @@ void GameRuntime::RuntimeState::tick(uint64_t delta_ms, const FrameInput& in) {
         const bool push_absorbs = pc.left_push_handled && !click_wait;
         clicked = !pc.input_swallowed && !pc.layer_handled && !pc.drag_handled &&
                   !push_absorbs;
+        // A button whose handler queued tags (dialog YES: close + load) while
+        // the script sits on a queue-armed click park must release that park
+        // the way Enter does; otherwise the queue behind it never drains.
+        if (handler_queued && wait_ && wait_->waiting_click() &&
+            interpreter_->last_wait_from_queue())
+            clicked = true;
     } else {
         clicked = input_state_.down_edges_.count(kKeyEnter) > 0 || input_state_.down_edges_.count(kKeySpace) > 0;
     }
@@ -1404,6 +1412,19 @@ bool GameRuntime::RuntimeState::apply_scene_event(const oa::runtime::Event& e) {
         }
         // A deleted subtree releases its layer-video channels.
         media_.video_.stop_layer_subtree(e.id);
+        // ...and its hover: a layer later rebuilt under the same id (title
+        // button 500.d.2 -> story-select tile 500.d.2) is a new button and
+        // must get its own rollover, or the script never sets its cursor and
+        // ignores the click.
+        for (auto it = pointer_.hovered_.begin(); it != pointer_.hovered_.end();) {
+            const std::string& id = *it;
+            if (id == e.id || (id.size() > e.id.size() + 1 &&
+                               id.compare(0, e.id.size(), e.id) == 0 &&
+                               id[e.id.size()] == '.'))
+                it = pointer_.hovered_.erase(it);
+            else
+                ++it;
+        }
         return true;
     }
     if (e.kind == K::LayerSetProps) {
