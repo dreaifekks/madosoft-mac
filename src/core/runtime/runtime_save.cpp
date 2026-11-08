@@ -154,12 +154,13 @@ void GameRuntime::RuntimeState::sysload() {
                                  path.c_str(), stats.pluto_failed);
                 }
                 if (!off.read_lines.empty()) {
-                    // 引擎目前没有"已读行"状态存储（skip 不做已读判定），所以
-                    // 只报数量；将来接 skip-read 时这张表就是入口。
+                    // 原生引擎自己的已读行表（脚本用 [alreadyread] 开关它）。
+                    // 引擎没有这张表，只报数量；脚本层的已读记录（例如
+                    // g.script 里的 aread）在上面的 Pluto 表里一起导入。
                     std::fprintf(stderr,
                                  "[runtime] sysload %s: %zu script(s) / %zu read-line(s) in "
-                                 "the official progress table (not applied: the engine keeps "
-                                 "no read state)\n",
+                                 "the native read table (not applied: the engine has no such "
+                                 "table; script-side read state comes with the Pluto tables)\n",
                                  path.c_str(), off.read_lines.size(), stats.read_lines);
                 }
             } catch (const std::exception& e) {
