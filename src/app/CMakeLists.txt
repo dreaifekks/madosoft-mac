@@ -54,3 +54,12 @@ if(MSVC)
 else()
   target_compile_options(openartemis PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# Test driver: the same host plus scripted input (src/app/drive.cpp).
+option(OA_BUILD_DRIVE "Build openartemis_drive (scripted input, frame dumps)" OFF)
+if(OA_BUILD_DRIVE AND NOT ANDROID AND NOT EMSCRIPTEN)
+  add_executable(openartemis_drive main.cpp drive.cpp ${OA_HOST_PLATFORM})
+  target_compile_definitions(openartemis_drive PRIVATE OA_DRIVE=1)
+  target_include_directories(openartemis_drive PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+  target_link_libraries(openartemis_drive PRIVATE libopenartemis SDL3::SDL3)
+endif()

@@ -3126,6 +3126,17 @@ void App::request_repaint()
     if (impl_->rt) impl_->rt->request_repaint();
 }
 
+void App::dump(const std::string& path)
+{
+    impl_->cfg.dump = path;
+    impl_->dump_frame();
+}
+
+void App::dump_state()
+{
+    impl_->dump_state();
+}
+
 void App::key_event(int vk, bool down)
 {
     if (impl_->rt) impl_->rt->key_event(vk, down);

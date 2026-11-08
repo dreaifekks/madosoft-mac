@@ -42,6 +42,10 @@ public:
     AppResult run_headless();
     void reset_clock();
     void request_repaint();
+    /// Write the last presented frame as PPM (test drivers).
+    void dump(const std::string& path);
+    /// Print the OA_SCENEDUMP / OA_TXTDUMP / OA_VARDUMP reports now.
+    void dump_state();
 
     void key_event(int vk, bool down);
     void mouse_move(float window_x, float window_y);

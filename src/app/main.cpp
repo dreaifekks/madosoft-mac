@@ -446,6 +446,9 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     if (!host || !host->app) return SDL_APP_SUCCESS;
 
     if (oa::plat::take_lifecycle_resume()) host->app->reset_clock();
+#if defined(OA_DRIVE)
+    if (!oa::drive::step(*host->app, host->window)) return SDL_APP_SUCCESS;
+#endif
 
     switch (host->app->tick()) {
         case oa::runtime::AppResult::Continue:
