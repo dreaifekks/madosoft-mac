@@ -20,6 +20,12 @@
 
 #include "core/runtime/runtime.h"
 #include "platform/Platform.h"
+#if defined(__APPLE__)
+#include "macos_bundle.h"
+#endif
+#if defined(OA_DRIVE)
+#include "drive.h"
+#endif
 
 namespace {
 
@@ -44,6 +50,7 @@ struct HostState {
     Uint8 pending_button = 0;
     float pending_x = 0.0f;
     float pending_y = 0.0f;
+    std::map<SDL_Keycode, int> command_keys; // held ⌘-digit -> the F key sent for it
 };
 
 void print_usage(const char* argv0)
@@ -293,6 +300,13 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
     const int parsed = parse_args(argc, argv, cfg);
     if (parsed == 1) return SDL_APP_SUCCESS;
     if (parsed == 2) return SDL_APP_FAILURE;
+    std::string title = "openartemis";
+#if defined(__APPLE__)
+    // A per-game .app: no arguments, the game comes from the bundle. A filled
+    // project here means the user quit at the missing-disk prompt.
+    if (cfg.project.empty() && !oa::macos::load_bundle(cfg, title) && !cfg.project.empty())
+        return SDL_APP_SUCCESS;
+#endif
     if (cfg.project.empty()) {
         std::fprintf(stderr, "openartemis: no project given\n");
         print_usage(argv[0]);
@@ -316,7 +330,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 
     if (const char* root = std::getenv("OA_SAVE_ROOT"); root && *root) {
         cfg.save_root = root;
-    } else {
+    } else if (cfg.save_root.empty()) {
         std::error_code ec;
         const bool is_dir = std::filesystem::is_directory(cfg.project, ec);
         cfg.save_root = oa::plat::default_save_root(cfg.project, is_dir);
@@ -337,7 +351,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 #endif
     if (renderer == "gles") flags |= SDL_WINDOW_OPENGL;
 
-    host->window = SDL_CreateWindow("openartemis", host->app->stage_width(),
+    host->window = SDL_CreateWindow(title.c_str(), host->app->stage_width(),
                                     host->app->stage_height(), flags);
     if (!host->window) {
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -358,8 +372,44 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* ev)
     if (!host || !host->app) return SDL_APP_CONTINUE;
 
     if (ev->type == SDL_EVENT_QUIT) return SDL_APP_SUCCESS;
+#if defined(__APPLE__)
+    // macOS: Esc belongs to the game (close menu / hide the message window),
+    // quitting is ⌘Q. The system takes the function keys, so ⌘1..⌘9 / ⌘0
+    // stand for F1..F10, and ⌃⌘F toggles fullscreen.
+    if (ev->type == SDL_EVENT_KEY_DOWN || ev->type == SDL_EVENT_KEY_UP) {
+        const bool down = ev->type == SDL_EVENT_KEY_DOWN;
+        const SDL_Keycode key = ev->key.key;
+        if (key == SDLK_ESCAPE) {
+            if (!ev->key.repeat) host->app->key_event(27, down);
+            return SDL_APP_CONTINUE;
+        }
+        if (down && (ev->key.mod & SDL_KMOD_GUI) && (ev->key.mod & SDL_KMOD_CTRL) &&
+            key == SDLK_F) {
+            const bool full = SDL_GetWindowFlags(host->window) & SDL_WINDOW_FULLSCREEN;
+            SDL_SetWindowFullscreen(host->window, !full);
+            return SDL_APP_CONTINUE;
+        }
+        if (down && (ev->key.mod & SDL_KMOD_GUI) && key >= SDLK_0 && key <= SDLK_9) {
+            const int vk = key == SDLK_0 ? 121 : 112 + int(key - SDLK_1);
+            if (!ev->key.repeat) {
+                host->command_keys[key] = vk;
+                host->app->key_event(vk, true);
+            }
+            return SDL_APP_CONTINUE;
+        }
+        if (!down) {
+            auto it = host->command_keys.find(key);
+            if (it != host->command_keys.end()) {
+                host->app->key_event(it->second, false);
+                host->command_keys.erase(it);
+                return SDL_APP_CONTINUE;
+            }
+        }
+    }
+#else
     if (ev->type == SDL_EVENT_KEY_DOWN && ev->key.key == SDLK_ESCAPE)
         return SDL_APP_SUCCESS;
+#endif
 
     if (ev->type == SDL_EVENT_WINDOW_RESIZED ||
         ev->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED ||
