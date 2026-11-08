@@ -264,6 +264,8 @@ void AudioEngine::play_se(const std::string& id, const std::string& file,
                           const SeConfig& config) {
     // skippable SEs do not play while skipping.
     if (config.skippable && state_.is_skipping) return;
+    if (std::getenv("OA_AUDIO_MIXDIAG"))
+        std::printf("[mixdiag] se play id=%s file=%s\n", id.c_str(), file.c_str());
     state_.se_channels.erase(id); // same-id new play replaces the old
     SoundChannel channel = build_channel(id, file, SoundCategory::Se, config.loop_play,
                                          config.skippable, config.gain, config.pan,
@@ -619,7 +621,13 @@ struct MixDiag {
     int bgm_silent = 0;
 };
 MixDiag& g_mix_diag() {
-    static MixDiag d;
+    static MixDiag d = [] {
+        MixDiag m;
+        m.enabled = std::getenv("OA_AUDIO_MIXDIAG") != nullptr;
+        if (const char* ms = std::getenv("OA_AUDIO_MIXDIAG_MS"))
+            m.bucket_frames = uint64_t(std::atoi(ms)) * uint64_t(MediaPlayers::kOutputRate) / 1000;
+        return m;
+    }();
     return d;
 }
 double db_fs(double amplitude) {
