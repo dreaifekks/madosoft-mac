@@ -125,6 +125,22 @@
         "OA_ENABLE_TESTS": "ON",
         "OA_ENABLE_FUZZ": "ON"
       }
+    },
+    {
+      "name": "macos-arm64",
+      "displayName": "vcpkg arm64-osx (static deps) Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/macos-arm64",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "arm64-osx-14",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "14.0",
+        "CMAKE_BUILD_TYPE": "Release",
+        "OA_BUILD_TOOLS": "OFF",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/triplets",
+        "OA_BUILD_DRIVE": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -164,6 +180,10 @@
     {
       "name": "mingw-asan-fuzz",
       "configurePreset": "mingw-asan-fuzz"
+    },
+    {
+      "name": "macos-arm64",
+      "configurePreset": "macos-arm64"
     }
   ]
 }
