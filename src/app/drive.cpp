@@ -14,10 +14,13 @@
 //   dump PATH         write the current frame as PPM
 //   state             print the OA_SCENEDUMP / OA_TXTDUMP / OA_VARDUMP reports
 //   resize W H        set the window size
-//   fullscreen 0|1
-//   quit
+//   fullscreen 0|1    through the host's own fullscreen switch
+//   close             a quit request, as ⌘Q or the close button send it
+//   dialog N          answer later [dialog] boxes with N (1 yes/OK, 0 no; default 0)
+//   quit              stop at once
 #include "drive.h"
 
+#include <SDL3/SDL_events.h>
 #include <SDL3/SDL_timer.h>
 
 #include <cstdio>
@@ -42,6 +45,7 @@ struct State {
     int clicks_left = 0;
     int clicks_every = 0;
     float clicks_x = 0, clicks_y = 0;
+    int dialog_answer = 0;
     bool loaded = false;
 };
 
@@ -64,7 +68,17 @@ State& state()
 
 } // namespace
 
-bool step(oa::runtime::App& app, SDL_Window* window)
+int dialog(const std::string& title, const std::string& message, bool yes_no)
+{
+    const int answer = state().dialog_answer;
+    std::printf("[drive] dialog %s title=\"%s\" message=\"%s\" -> %d\n",
+                yes_no ? "yes/no" : "ok", title.c_str(), message.c_str(), answer);
+    std::fflush(stdout);
+    return answer;
+}
+
+bool step(oa::runtime::App& app, SDL_Window* window,
+          const std::function<void(bool)>& set_fullscreen)
 {
     State& s = state();
     if (s.release_vk) {
@@ -141,7 +155,13 @@ bool step(oa::runtime::App& app, SDL_Window* window)
         } else if (cmd == "fullscreen") {
             int on = 0;
             in >> on;
-            SDL_SetWindowFullscreen(window, on != 0);
+            set_fullscreen(on != 0);
+        } else if (cmd == "close") {
+            SDL_Event ev{};
+            ev.type = SDL_EVENT_QUIT;
+            SDL_PushEvent(&ev);
+        } else if (cmd == "dialog") {
+            in >> s.dialog_answer;
         } else if (cmd == "quit") {
             return false;
         } else {

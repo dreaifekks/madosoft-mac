@@ -7,6 +7,7 @@
 #include <SDL3/SDL_hints.h>
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_keycode.h>
+#include <SDL3/SDL_messagebox.h>
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
 
@@ -50,7 +51,7 @@ struct HostState {
     Uint8 pending_button = 0;
     float pending_x = 0.0f;
     float pending_y = 0.0f;
-    std::map<SDL_Keycode, int> command_keys; // held ⌘-digit -> the F key sent for it
+    std::map<SDL_Keycode, int> command_keys; // held ⌘ key -> the F key sent for it
     bool fullscreen = false; // last state asked for or reported by the window
 };
 
@@ -63,6 +64,29 @@ void set_fullscreen(HostState* host, bool on)
     host->fullscreen = on;
     host->app->set_fullscreen(on);
 }
+
+#if defined(__APPLE__) && !defined(OA_DRIVE)
+// [dialog]: the native engine's OS message box (the game's own wording, e.g.
+// the close button's "quit the game?"), modal over the game window.
+int show_dialog(SDL_Window* window, const std::string& title, const std::string& message,
+                bool yes_no)
+{
+    const SDL_MessageBoxButtonData yes_no_buttons[] = {
+        {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "是"},
+        {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "否"},
+    };
+    const SDL_MessageBoxButtonData ok_button[] = {
+        {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 1,
+         "确定"},
+    };
+    const SDL_MessageBoxData box = {SDL_MESSAGEBOX_INFORMATION, window, title.c_str(),
+                                    message.c_str(), yes_no ? 2 : 1,
+                                    yes_no ? yes_no_buttons : ok_button, nullptr};
+    int choice = 0;
+    SDL_ShowMessageBox(&box, &choice);
+    return choice;
+}
+#endif
 
 void print_usage(const char* argv0)
 {
@@ -347,6 +371,13 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
         cfg.save_root = oa::plat::default_save_root(cfg.project, is_dir);
     }
     const std::string renderer = cfg.renderer;
+#if defined(OA_DRIVE)
+    cfg.dialog = oa::drive::dialog; // the script answers
+#elif defined(__APPLE__)
+    cfg.dialog = [host](const std::string& title, const std::string& message, bool yes_no) {
+        return show_dialog(host->window, title, message, yes_no);
+    };
+#endif
 
     host->app = new oa::runtime::App(std::move(cfg));
     if (!host->app->boot()) return SDL_APP_FAILURE;
@@ -382,11 +413,17 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* ev)
     HostState* host = static_cast<HostState*>(appstate);
     if (!host || !host->app) return SDL_APP_CONTINUE;
 
+#if defined(__APPLE__)
+    // ⌘Q and the close button reach the game's own close handler first, as on
+    // Windows: it asks, saves (read text, settings) and exits by itself.
+    if (ev->type == SDL_EVENT_QUIT && host->app->window_close()) return SDL_APP_CONTINUE;
+#endif
     if (ev->type == SDL_EVENT_QUIT) return SDL_APP_SUCCESS;
 #if defined(__APPLE__)
     // macOS: Esc belongs to the game (close menu / hide the message window),
     // quitting is ⌘Q. The system takes the function keys, so ⌘1..⌘9 / ⌘0
-    // stand for F1..F10, and ⌃⌘F toggles fullscreen.
+    // stand for F1..F10, ⌘S / ⌘L for F4 / F5 (quick save / load), and ⌃⌘F
+    // toggles fullscreen.
     if (ev->type == SDL_EVENT_KEY_DOWN || ev->type == SDL_EVENT_KEY_UP) {
         const bool down = ev->type == SDL_EVENT_KEY_DOWN;
         const SDL_Keycode key = ev->key.key;
@@ -396,11 +433,15 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* ev)
         }
         if (down && (ev->key.mod & SDL_KMOD_GUI) && (ev->key.mod & SDL_KMOD_CTRL) &&
             key == SDLK_F) {
-            set_fullscreen(host, !host->fullscreen);
+            if (!ev->key.repeat) set_fullscreen(host, !host->fullscreen);
             return SDL_APP_CONTINUE;
         }
-        if (down && (ev->key.mod & SDL_KMOD_GUI) && key >= SDLK_0 && key <= SDLK_9) {
-            const int vk = key == SDLK_0 ? 121 : 112 + int(key - SDLK_1);
+        const int vk = key == SDLK_0                   ? 121
+                       : key >= SDLK_1 && key <= SDLK_9 ? 112 + int(key - SDLK_1)
+                       : key == SDLK_S                  ? 115
+                       : key == SDLK_L                  ? 116
+                                                        : 0;
+        if (down && (ev->key.mod & SDL_KMOD_GUI) && vk) {
             if (!ev->key.repeat) {
                 host->command_keys[key] = vk;
                 host->app->key_event(vk, true);
@@ -466,7 +507,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 
     if (oa::plat::take_lifecycle_resume()) host->app->reset_clock();
 #if defined(OA_DRIVE)
-    if (!oa::drive::step(*host->app, host->window)) return SDL_APP_SUCCESS;
+    if (!oa::drive::step(*host->app, host->window, [host](bool on) { set_fullscreen(host, on); }))
+        return SDL_APP_SUCCESS;
 #endif
 
     if (host->app->take_fullscreen_toggle()) set_fullscreen(host, !host->fullscreen);
