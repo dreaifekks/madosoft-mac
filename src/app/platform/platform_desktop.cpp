@@ -11,6 +11,8 @@
 //     ASCII, case-insensitive, traversal-guarded) and the
 //     std::filesystem host ops make the save-root rule platform-independent.
 //     TODO: split platform_windows.cpp when a real divergence appears.
+//     macOS differs: saves go under ~/Library/Application Support, never
+//     into the game folder (see default_save_root).
 //   - lifecycle: nothing. The desktop loop is never blocked by the OS (an
 //     unfocused/occluded window keeps iterating), so no paused gap exists
 //     and SDL never delivers the iOS/Android-only background/foreground
@@ -20,6 +22,7 @@
 //     path; headless never touches SDL).
 #include "platform/Platform.h"
 
+#include <cstdlib>
 #include <filesystem>
 
 namespace oa::plat {
@@ -30,6 +33,17 @@ std::string default_save_root(const std::string& data_path, bool data_is_dir) {
                                          : std::filesystem::path(data_path).parent_path())
                                 .string();
     if (save_root.empty()) save_root = ".";
+#if defined(__APPLE__)
+    // ~/Library/Application Support/Madosoft Artemis/<game folder>/save: the
+    // game folder is often a read-only or external disk.
+    std::error_code ec;
+    std::filesystem::path game = std::filesystem::absolute(save_root, ec).lexically_normal();
+    if (!game.has_filename()) game = game.parent_path(); // "dir/" names dir
+    const char* home = std::getenv("HOME");
+    save_root = (std::filesystem::path(home ? home : "") /
+                 "Library/Application Support/Madosoft Artemis" / game.filename() / "save")
+                    .string();
+#endif
     return save_root;
 }
 

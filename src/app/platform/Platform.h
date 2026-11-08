@@ -2,8 +2,9 @@
 // oa::plat — the few host services that differ per OS family. This is part
 // of the SDL/app layer; the engine library never sees it.
 //
-//   default_save_root()      writable save root (desktop = game dir,
-//                            android = app storage, wasm = IDBFS /save).
+//   default_save_root()      writable save root (desktop = game dir, macOS =
+//                            Application Support, android = app storage,
+//                            wasm = IDBFS /save).
 //   init() / shutdown()      platform boot/teardown (wasm mounts IDBFS).
 //   take_lifecycle_resume()  true once after background -> foreground, so
 //                            main.cpp can reset the engine tick clock.
