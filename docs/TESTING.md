@@ -26,8 +26,9 @@ openartemis [options] [project.pfs]     # pfs 或解包目录（含 system.ini�
   -h, --help
 ```
 
-窗口模式 Esc / 关窗 / 游戏自身 exit 退出；存档根默认 = 游戏数据所在目录
-（可用 `OA_SAVE_ROOT` 覆盖）。离屏/无人值守跑一律加 `--mute`：设备、解码、
+窗口模式 Esc / 关窗 / 游戏自身 exit 退出（macOS：Esc 交给游戏；关窗和 ⌘Q 先走游戏
+注册的关闭处理，由游戏确认、保存后退出）；存档根默认 = 游戏数据所在目录（macOS 为
+`~/Library/Application Support/Madosoft Artemis/<游戏目录名>/save`；可用 `OA_SAVE_ROOT` 覆盖）。离屏/无人值守跑一律加 `--mute`：设备、解码、
 混音队列照旧，只把主音量置 0。
 
 ---
@@ -68,7 +69,7 @@ cmake -S . -B build/windows -DOA_ENABLE_TESTS=ON \
 | 变量 | 作用 | 示例 |
 |---|---|---|
 | `OA_PFS` | 无位置参数时的默认项目（没有本机硬编码默认值） | `OA_PFS=/x/root.pfs ./openartemis --frames 900` |
-| `OA_SAVE_ROOT` | 覆盖可写存档根目录（默认=平台默认：desktop 用游戏数据目录，android 用 app 私有目录，wasm 用 IDBFS `/save`） | `OA_SAVE_ROOT=/tmp/s1 ./openartemis a.pfs` |
+| `OA_SAVE_ROOT` | 覆盖可写存档根目录（默认=平台默认：desktop 用游戏数据目录，macOS 用 `~/Library/Application Support/Madosoft Artemis/<游戏目录名>/save`，android 用 app 私有目录，wasm 用 IDBFS `/save`） | `OA_SAVE_ROOT=/tmp/s1 ./openartemis a.pfs` |
 | `OA_RENDERER` | 默认渲染后端 `sdl`（默认）/ `gles`，等价于 `--renderer` | `OA_RENDERER=gles ./openartemis a.pfs` |
 
 ### B. 回归门控（configure 期）
