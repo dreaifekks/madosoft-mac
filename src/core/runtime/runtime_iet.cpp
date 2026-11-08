@@ -3083,6 +3083,10 @@ bool Interpreter::apply_var(const std::map<std::string, std::string>& params) {
         variables_.set(name, Value::make_string(os));
         return true;
     }
+    if (system == "fullscreen") {
+        variables_.set(name, Value::make_string(variables_.fullscreen ? "1" : "0"));
+        return true;
+    }
     if (system == "delete") {
         // Delete requires an explicit variable name. A nameless [var
         if (name.empty()) return true;

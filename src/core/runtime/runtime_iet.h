@@ -94,6 +94,10 @@ public:
     Map temp;
     Map system;
     std::string platform; // "windows" / "android" / ... (not persisted)
+    // Host window state for [var system=fullscreen] and the toggle asked for by
+    // [exec command=fullscreen]; the host owns both (not persisted).
+    bool fullscreen = false;
+    bool fullscreen_toggle = false;
 };
 
 // --------------------------------------------------------------------------- expressions — ExpressionEvaluator...

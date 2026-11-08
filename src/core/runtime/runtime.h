@@ -51,6 +51,10 @@ public:
     void mouse_move(float window_x, float window_y);
     void mouse_button(int vk, bool down); // 1 left, 2 right, 3 middle
     void mouse_wheel(int direction);      // > 0 up, < 0 down
+    /// Window state the scripts read back ([var system=fullscreen]).
+    void set_fullscreen(bool on);
+    /// True once per script [exec command=fullscreen]: the host toggles.
+    bool take_fullscreen_toggle();
 
     AppResult tick();
 

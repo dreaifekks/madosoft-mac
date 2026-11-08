@@ -2680,6 +2680,8 @@ void GameRuntime::RuntimeState::apply_exec_command(const std::map<std::string, s
         dispatch_mode_input("backlogin");
     } else if (command == "backlogclose") {
         dispatch_mode_input("backlogout");
+    } else if (command == "fullscreen") {
+        interpreter_->variables().fullscreen_toggle = true; // the host flips the window
     } else {
         // exec commands without an engine mapping are a diagnostic no-op
         std::fprintf(stderr, "[runtime] exec command not mapped: %s\n", command.c_str());
@@ -3178,6 +3180,20 @@ void App::mouse_button(int vk, bool down)
 void App::mouse_wheel(int direction)
 {
     if (impl_->rt) impl_->rt->mouse_wheel(direction);
+}
+
+void App::set_fullscreen(bool on)
+{
+    if (impl_->rt) impl_->rt->interpreter().variables().fullscreen = on;
+}
+
+bool App::take_fullscreen_toggle()
+{
+    if (!impl_->rt) return false;
+    bool& toggle = impl_->rt->interpreter().variables().fullscreen_toggle;
+    const bool requested = toggle;
+    toggle = false;
+    return requested;
 }
 
 AppResult App::tick()

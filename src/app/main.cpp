@@ -51,7 +51,18 @@ struct HostState {
     float pending_x = 0.0f;
     float pending_y = 0.0f;
     std::map<SDL_Keycode, int> command_keys; // held ⌘-digit -> the F key sent for it
+    bool fullscreen = false; // last state asked for or reported by the window
 };
+
+// Fullscreen switches are asynchronous on macOS: record the requested state at
+// once (the enter/leave events confirm it) so the game's config page, which
+// reads it back every frame, neither flips its button back nor toggles twice.
+void set_fullscreen(HostState* host, bool on)
+{
+    if (!SDL_SetWindowFullscreen(host->window, on)) return;
+    host->fullscreen = on;
+    host->app->set_fullscreen(on);
+}
 
 void print_usage(const char* argv0)
 {
@@ -385,8 +396,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* ev)
         }
         if (down && (ev->key.mod & SDL_KMOD_GUI) && (ev->key.mod & SDL_KMOD_CTRL) &&
             key == SDLK_F) {
-            const bool full = SDL_GetWindowFlags(host->window) & SDL_WINDOW_FULLSCREEN;
-            SDL_SetWindowFullscreen(host->window, !full);
+            set_fullscreen(host, !host->fullscreen);
             return SDL_APP_CONTINUE;
         }
         if (down && (ev->key.mod & SDL_KMOD_GUI) && key >= SDLK_0 && key <= SDLK_9) {
@@ -411,6 +421,15 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* ev)
         return SDL_APP_SUCCESS;
 #endif
 
+    if (ev->type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN ||
+        ev->type == SDL_EVENT_WINDOW_LEAVE_FULLSCREEN) {
+        const bool full = ev->type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN;
+        std::printf("[app] window %s fullscreen\n", full ? "entered" : "left");
+        host->fullscreen = full;
+        host->app->set_fullscreen(full);
+        host->app->request_repaint();
+        return SDL_APP_CONTINUE;
+    }
     if (ev->type == SDL_EVENT_WINDOW_RESIZED ||
         ev->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED ||
         ev->type == SDL_EVENT_WINDOW_EXPOSED) {
@@ -449,6 +468,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 #if defined(OA_DRIVE)
     if (!oa::drive::step(*host->app, host->window)) return SDL_APP_SUCCESS;
 #endif
+
+    if (host->app->take_fullscreen_toggle()) set_fullscreen(host, !host->fullscreen);
 
     switch (host->app->tick()) {
         case oa::runtime::AppResult::Continue:
