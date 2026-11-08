@@ -1961,10 +1961,12 @@ GameRuntime::RuntimeState::PointerConsumption GameRuntime::RuntimeState::process
         return out;
     };
 
-    // Hover is rect-based; the diff runs only on pointer motion.
+    // Hover is rect-based; the diff runs on pointer motion, and on a press so
+    // a button that appeared under a resting pointer (a choice popping up
+    // under the cursor) gets its rollover before the click lands.
     // Details: docs/RUNTIME_NOTES.md.
     std::set<std::string> prev_hovered = pointer_.hovered_;
-    if (pointer_moved) {
+    if (pointer_moved || left_down_edge) {
     std::set<std::string> hit_ids(hits.begin(), hits.end());
     const auto hover_list = dispatch_list(interactive, "rollover");
     std::set<std::string> new_hovered(hover_list.begin(), hover_list.end());
