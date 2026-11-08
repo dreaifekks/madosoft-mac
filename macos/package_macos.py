@@ -154,9 +154,11 @@ def evb_package(exe):
         return None
     package = exe.parent / m.group(1).decode('utf-16le')
     if not package.is_file():
-        return None
+        raise SystemExit(f'{exe.name} maps in {package}, which is missing')
     with package.open('rb') as f:
-        return package if f.read(4) == b'EVB\0' else None
+        if f.read(4) != b'EVB\0':
+            raise SystemExit(f'{package}: not an Enigma Virtual Box package (no EVB header)')
+    return package
 
 
 def extract_evb(package, target, evbunpack):
