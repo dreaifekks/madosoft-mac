@@ -231,6 +231,7 @@ void GameRuntime::key_event(int vk, bool down) { s_->key_event(vk, down); }
 void GameRuntime::mouse_move(float window_x, float window_y) { s_->mouse_move(window_x, window_y); }
 void GameRuntime::mouse_button(int vk, bool down) { s_->mouse_button(vk, down); }
 void GameRuntime::mouse_wheel(int direction) { s_->mouse_wheel(direction); }
+bool GameRuntime::window_close() { return s_->window_close(); }
 bool GameRuntime::exit_requested() const { return s_->exit_requested(); }
 std::vector<oa::runtime::Event> GameRuntime::drain_events() { return s_->drain_events(); }
 oa::runtime::Interpreter& GameRuntime::interpreter() { return s_->interpreter(); }
@@ -326,6 +327,10 @@ size_t GameRuntime::media_handler_dispatches() const { return s_->media_handler_
 void GameRuntime::enable_decode_pool(int threads) { s_->enable_decode_pool(threads); }
 void GameRuntime::set_save_store(std::shared_ptr<oa::runtime::SaveStore> store) { s_->set_save_store(std::move(store)); }
 void GameRuntime::set_frame_capture(CaptureFn fn) { s_->set_frame_capture(std::move(fn)); }
+void GameRuntime::set_dialog_host(
+    std::function<int(const std::string&, const std::string&, bool)> fn) {
+    s_->dialog_host_ = std::move(fn);
+}
 void GameRuntime::post_frame_capture() { s_->post_frame_capture(); }
 bool GameRuntime::syssave() { return s_->syssave(); }
 bool GameRuntime::save_game_to(const std::string& file) { return s_->save_game_to(file); }
@@ -2081,6 +2086,14 @@ GameRuntime::RuntimeState::PointerConsumption GameRuntime::RuntimeState::process
         // Cancel press also runs the push row so flg.keycode is recorded.
         if (cancel_park) pc.role_advance = true;
     }
+    // The window's close button runs [setonwindowbutton button=0] like a key
+    // row, as the native engine does: the game asks, saves and [exit]s.
+    if (window_close_pending_) {
+        window_close_pending_ = false;
+        if (const auto* row = scene().get_input_handler("windowbutton", "0"))
+            dispatch_input_row("setonwindowbutton", *row, {{"button", "0"}},
+                               PointerDispatch::Kind::Push);
+    }
     return pc;
 }
 
@@ -2665,6 +2678,21 @@ void GameRuntime::RuntimeState::apply_automode_config(const std::map<std::string
     if (sync_it != params.end()) control_.automode_syncse_ = sync_it->second;
 }
 
+void GameRuntime::RuntimeState::show_dialog(const std::map<std::string, std::string>& params) {
+    // [dialog title message varname] is the native engine's OS message box:
+    // with varname the script wants an answer (yes = 1, no = 0), else it only
+    // informs. Without a host box the tag stays a no-op.
+    if (!dialog_host_) return;
+    const auto get = [&params](const char* key) {
+        const auto it = params.find(key);
+        return it == params.end() ? std::string() : it->second;
+    };
+    const std::string varname = get("varname");
+    const int answer = dialog_host_(get("title"), get("message"), !varname.empty());
+    if (!varname.empty())
+        interpreter_->set_variable(varname, oa::runtime::Value::make_int(answer));
+}
+
 void GameRuntime::RuntimeState::apply_exec_command(const std::map<std::string, std::string>& params) {
     const auto cmd_it = params.find("command");
     if (cmd_it == params.end()) return;
@@ -2726,6 +2754,10 @@ bool GameRuntime::RuntimeState::apply_control_config(const oa::runtime::Event& e
     }
     if (e.tag == "exec") {
         apply_exec_command(e.params);
+        return true;
+    }
+    if (e.tag == "dialog") {
+        show_dialog(e.params);
         return true;
     }
     return false;
@@ -2811,6 +2843,13 @@ void GameRuntime::RuntimeState::mouse_wheel(int direction)
     const int vk = direction > 0 ? 136 : 137;
     input_.frame.key_down_edges.push_back(vk);
     input_.wheel_hold_frames[vk] = 2;
+}
+
+bool GameRuntime::RuntimeState::window_close()
+{
+    if (!scene().get_input_handler("windowbutton", "0")) return false;
+    window_close_pending_ = true;
+    return true;
 }
 
 void GameRuntime::RuntimeState::finish_frame()
@@ -3020,6 +3059,7 @@ bool App::Impl::boot()
 
     rt = std::make_shared<GameRuntime>(fs);
     rt->enable_decode_pool();
+    rt->set_dialog_host(cfg.dialog);
 
     if (!cfg.save_root.empty()) {
         auto store = std::make_shared<oa::runtime::DirSaveStore>(cfg.save_root);
@@ -3190,6 +3230,11 @@ void App::mouse_button(int vk, bool down)
 void App::mouse_wheel(int direction)
 {
     if (impl_->rt) impl_->rt->mouse_wheel(direction);
+}
+
+bool App::window_close()
+{
+    return impl_->rt && impl_->rt->window_close();
 }
 
 void App::set_fullscreen(bool on)

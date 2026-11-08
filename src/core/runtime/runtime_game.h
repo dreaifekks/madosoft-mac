@@ -86,6 +86,10 @@ public:
     void mouse_move(float window_x, float window_y);
     void mouse_button(int vk, bool down); // 1 left, 2 right, 3 middle
     void mouse_wheel(int direction);      // > 0 up, < 0 down
+    /// The window's close button: true when the game registered
+    /// [setonwindowbutton button=0] — its handler runs next tick and the game
+    /// asks, saves and [exit]s itself; false = nothing to run, the host quits.
+    bool window_close();
     bool exit_requested() const;
     /// Host events since the last drain; scene/text/media events never appear.
     std::vector<oa::runtime::Event> drain_events();
@@ -219,6 +223,9 @@ public:
     /// writes a deterministic placeholder thumbnail.
     using CaptureFn = std::function<std::optional<std::vector<uint8_t>>(uint32_t*, uint32_t*)>;
     void set_frame_capture(CaptureFn fn);
+    /// Host modal message box for [dialog] (DialogHost in runtime.h): 1 =
+    /// yes/OK, 0 = no. Unset = the tag stays a no-op.
+    void set_dialog_host(std::function<int(const std::string&, const std::string&, bool)> fn);
     /// syssave: persist g./s. domains into saveg.dat/system.dat.
     bool syssave();
     /// Numbered save (host/tests may call directly).

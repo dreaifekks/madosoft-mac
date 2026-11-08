@@ -2463,6 +2463,12 @@ static TagOutcome execute_tag(Interpreter& it, const Instruction& ins, bool appl
                 return out;
             }
         }
+        // [dialog] without a text field is the native OS message box: the
+        // runtime asks the host and stores the answer in varname.
+        if (tag == "dialog" && !ins.get("textfield")) {
+            set_event(Event::Kind::ConfigEvent);
+            return out;
+        }
     }
 
     if (tag == "yesno" || tag == "dialog") {

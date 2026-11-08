@@ -132,6 +132,8 @@ struct GameRuntime::RuntimeState {
     void mouse_move(float window_x, float window_y);
     void mouse_button(int vk, bool down);
     void mouse_wheel(int direction);
+    bool window_close();
+    bool window_close_pending_ = false; // dispatched with the push rows
     void tick_input(uint64_t delta_ms);
     void finish_frame();
     std::vector<oa::runtime::Event> drain_events() {
@@ -223,6 +225,8 @@ struct GameRuntime::RuntimeState {
     }
     const std::shared_ptr<oa::runtime::SaveStore>& save_store() const { return save_.save_store_; }
     void set_frame_capture(CaptureFn fn) { save_.capture_fn_ = std::move(fn); }
+    std::function<int(const std::string&, const std::string&, bool)> dialog_host_;
+    void show_dialog(const std::map<std::string, std::string>& params);
     const std::string& savepath() const { return save_.savepath_; }
     void apply_save_event(const oa::runtime::Event& e) {
         handle_save_tag(e);
