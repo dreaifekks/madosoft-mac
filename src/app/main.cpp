@@ -22,6 +22,8 @@
 #include "core/runtime/runtime.h"
 #include "platform/Platform.h"
 #if defined(__APPLE__)
+#include <CoreFoundation/CoreFoundation.h>
+
 #include "macos_bundle.h"
 #endif
 #if defined(OA_DRIVE)
@@ -53,6 +55,10 @@ struct HostState {
     float pending_y = 0.0f;
     std::map<SDL_Keycode, int> command_keys; // held ⌘ key -> the F key sent for it
     bool fullscreen = false; // last state asked for or reported by the window
+#if defined(__APPLE__)
+    CFRunLoopTimerRef animation_timer = nullptr;
+    oa::runtime::AppResult animation_result = oa::runtime::AppResult::Continue;
+#endif
 };
 
 // Fullscreen switches are asynchronous on macOS: record the requested state at
@@ -64,6 +70,29 @@ void set_fullscreen(HostState* host, bool on)
     host->fullscreen = on;
     host->app->set_fullscreen(on);
 }
+
+#if defined(__APPLE__)
+// AppKit animates a window zoom (the zoom button, SDL_MaximizeWindow) in a
+// private run loop mode and holds the main loop until it ends, about 0.4 s.
+// The mixer runs on frame ticks and keeps ~0.16 s queued, so the music dropped
+// out. Frames go on from a timer in that mode, as SDL keeps them going through
+// a live resize.
+void animation_tick(CFRunLoopTimerRef, void* info)
+{
+    auto* host = static_cast<HostState*>(info);
+    if (host->animation_result == oa::runtime::AppResult::Continue)
+        host->animation_result = host->app->tick(false);
+}
+
+void tick_through_window_animations(HostState* host)
+{
+    CFRunLoopTimerContext context = {0, host, nullptr, nullptr, nullptr};
+    host->animation_timer = CFRunLoopTimerCreate(nullptr, CFAbsoluteTimeGetCurrent(), 1.0 / 60.0,
+                                                 0, 0, animation_tick, &context);
+    CFRunLoopAddTimer(CFRunLoopGetMain(), host->animation_timer,
+                      CFSTR("_NSMoveTimerRunLoopMode"));
+}
+#endif
 
 #if defined(__APPLE__) && !defined(OA_DRIVE)
 // [dialog]: the native engine's OS message box (the game's own wording, e.g.
@@ -409,6 +438,9 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
     SDL_SetWindowAspectRatio(host->window, aspect, aspect);
 #endif
     if (!host->app->attach_window(host->window)) return SDL_APP_FAILURE;
+#if defined(__APPLE__)
+    tick_through_window_animations(host);
+#endif
     return SDL_APP_CONTINUE;
 }
 
@@ -517,7 +549,14 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 
     if (host->app->take_fullscreen_toggle()) set_fullscreen(host, !host->fullscreen);
 
-    switch (host->app->tick()) {
+#if defined(__APPLE__)
+    const oa::runtime::AppResult result = host->animation_result != oa::runtime::AppResult::Continue
+                                              ? host->animation_result
+                                              : host->app->tick();
+#else
+    const oa::runtime::AppResult result = host->app->tick();
+#endif
+    switch (result) {
         case oa::runtime::AppResult::Continue:
             touch_flush_release(host);
             return SDL_APP_CONTINUE;
@@ -535,6 +574,12 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result)
     HostState* host = static_cast<HostState*>(appstate);
     if (!host) return;
 
+#if defined(__APPLE__)
+    if (host->animation_timer) {
+        CFRunLoopTimerInvalidate(host->animation_timer);
+        CFRelease(host->animation_timer);
+    }
+#endif
     delete host->app;
     if (host->window) SDL_DestroyWindow(host->window);
     if (host->plat_inited) oa::plat::shutdown();

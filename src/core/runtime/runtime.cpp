@@ -2922,7 +2922,7 @@ struct App::Impl {
     bool quit = false;
 
     bool boot();
-    AppResult tick();
+    AppResult tick(bool pace);
     void reset_clock();
     void shutdown();
     void dump_frame();
@@ -3131,7 +3131,7 @@ bool App::Impl::boot()
     return true;
 }
 
-AppResult App::Impl::tick()
+AppResult App::Impl::tick(bool pace)
 {
     if (!rt) return AppResult::Error;
 
@@ -3159,7 +3159,7 @@ AppResult App::Impl::tick()
         if (cfg.headless) dump_state();
         dump_frame();
     }
-    if (cfg.headless) return quit ? AppResult::Exit : AppResult::Continue;
+    if (cfg.headless || !pace) return quit ? AppResult::Exit : AppResult::Continue;
 
     const int cap = cfg.fps > 0
                         ? cfg.fps
@@ -3231,7 +3231,7 @@ int App::stage_height() const
 AppResult App::run_headless()
 {
     AppResult r = AppResult::Continue;
-    while (r == AppResult::Continue) r = impl_->tick();
+    while (r == AppResult::Continue) r = impl_->tick(true);
     return r;
 }
 
@@ -3295,9 +3295,9 @@ bool App::take_fullscreen_toggle()
     return requested;
 }
 
-AppResult App::tick()
+AppResult App::tick(bool pace)
 {
-    return impl_->tick();
+    return impl_->tick(pace);
 }
 
 } // namespace oa::runtime

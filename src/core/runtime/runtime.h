@@ -66,7 +66,9 @@ public:
     /// True once per script [exec command=fullscreen]: the host toggles.
     bool take_fullscreen_toggle();
 
-    AppResult tick();
+    /// One frame. pace = false skips the frame-rate sleep, for a host timer
+    /// that already sets the rate.
+    AppResult tick(bool pace = true);
 
 private:
     struct Impl;
