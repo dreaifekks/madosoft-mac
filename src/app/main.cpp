@@ -403,6 +403,10 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
     if (!SDL_SetWindowFullscreen(host->window, true))
         std::fprintf(stderr, "[app] SDL_SetWindowFullscreen failed: %s\n",
                      SDL_GetError());
+#else
+    // Resizing keeps the stage's aspect ratio; fullscreen letterboxes it.
+    const float aspect = float(host->app->stage_width()) / float(host->app->stage_height());
+    SDL_SetWindowAspectRatio(host->window, aspect, aspect);
 #endif
     if (!host->app->attach_window(host->window)) return SDL_APP_FAILURE;
     return SDL_APP_CONTINUE;
