@@ -16,7 +16,8 @@
 //   resize W H        set the window size
 //   fullscreen 0|1    through the host's own fullscreen switch
 //   close             a quit request, as ⌘Q or the close button send it
-//   dialog N          answer later [dialog] boxes with N (1 yes/OK, 0 no; default 0)
+//   dialog N [MS]     answer later [dialog] boxes with N (1 yes/OK, 0 no; default 0),
+//                     after holding the box MS milliseconds, as a user would
 //   quit              stop at once
 #include "drive.h"
 
@@ -46,6 +47,7 @@ struct State {
     int clicks_every = 0;
     float clicks_x = 0, clicks_y = 0;
     int dialog_answer = 0;
+    uint32_t dialog_delay_ms = 0;
     bool loaded = false;
 };
 
@@ -70,11 +72,13 @@ State& state()
 
 int dialog(const std::string& title, const std::string& message, bool yes_no)
 {
-    const int answer = state().dialog_answer;
-    std::printf("[drive] dialog %s title=\"%s\" message=\"%s\" -> %d\n",
-                yes_no ? "yes/no" : "ok", title.c_str(), message.c_str(), answer);
+    const State& s = state();
+    std::printf("[drive] dialog %s title=\"%s\" message=\"%s\" -> %d after %ums\n",
+                yes_no ? "yes/no" : "ok", title.c_str(), message.c_str(), s.dialog_answer,
+                unsigned(s.dialog_delay_ms));
     std::fflush(stdout);
-    return answer;
+    if (s.dialog_delay_ms) SDL_Delay(s.dialog_delay_ms);
+    return s.dialog_answer;
 }
 
 bool step(oa::runtime::App& app, SDL_Window* window,
@@ -161,7 +165,8 @@ bool step(oa::runtime::App& app, SDL_Window* window,
             ev.type = SDL_EVENT_QUIT;
             SDL_PushEvent(&ev);
         } else if (cmd == "dialog") {
-            in >> s.dialog_answer;
+            s.dialog_delay_ms = 0;
+            in >> s.dialog_answer >> s.dialog_delay_ms;
         } else if (cmd == "quit") {
             return false;
         } else {
