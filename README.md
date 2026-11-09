@@ -1,3 +1,20 @@
+# madosoft-mac
+
+openartemis 的 macOS（Apple Silicon）分支：把まどそふと的《ハミダシクリエイティブ》和
+《ハミダシクリエイティブ凸》连同中文补丁，各打成一个双击即玩的 .app。游戏数据从用户自己的
+游戏目录只读加载，仓库不含任何游戏资产。
+
+- 引擎：[luxiaoling-mc/openartemis](https://github.com/luxiaoling-mc/openartemis)，
+  MIT 或 GPL-3.0-or-later 双许可，本分支基于上游 `65725c3`。
+- 补丁解包：第一款中文补丁的 Enigma Virtual Box 包在打包时用
+  [mos9527/evbunpack](https://github.com/mos9527/evbunpack)（Apache-2.0）解出，不进 app。
+- 构建、打包、实测范围和已知缺口见 [macos/README.md](macos/README.md)；
+  链接的库及其许可证见 [THIRD_PARTY.md](THIRD_PARTY.md)。
+
+以下是上游 openartemis 的说明。
+
+---
+
 # openartemis — artemisEngine
 
 C++20 + SDL3 的 **artemisEngine（Artemis 系视觉小说引擎）**：直接运行

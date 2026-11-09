@@ -46,7 +46,7 @@ python3 -m venv ~/code/.venvs/evb && ~/code/.venvs/evb/bin/pip install evbunpack
 打包并安装到 /Applications：
 
 ```bash
-G="/Volumes/BIWIN NV 3500 1TB Media/まどそふと"
+G="/Volumes/<外接盘>/まどそふと"   # 两款游戏所在的目录
 python3 macos/package_macos.py --game "$G/ハミダシクリエイティブ" \
     --evbunpack ~/code/.venvs/evb/bin/evbunpack --install
 python3 macos/package_macos.py --game "$G/ハミダシクリエイティブ凸" --install
