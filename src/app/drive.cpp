@@ -14,6 +14,7 @@
 //   dump PATH         write the current frame as PPM
 //   state             print the OA_SCENEDUMP / OA_TXTDUMP / OA_VARDUMP reports
 //   resize W H        set the window size
+//   maximize / restore  zoom the window as the title bar does, and back
 //   fullscreen 0|1    through the host's own fullscreen switch
 //   close             a quit request, as ⌘Q or the close button send it
 //   dialog N [MS]     answer later [dialog] boxes with N (1 yes/OK, 0 no; default 0),
@@ -160,6 +161,10 @@ bool step(oa::runtime::App& app, SDL_Window* window,
             int on = 0;
             in >> on;
             set_fullscreen(on != 0);
+        } else if (cmd == "maximize") {
+            SDL_MaximizeWindow(window);
+        } else if (cmd == "restore") {
+            SDL_RestoreWindow(window);
         } else if (cmd == "close") {
             SDL_Event ev{};
             ev.type = SDL_EVENT_QUIT;
