@@ -55,6 +55,11 @@ struct HostState {
     float pending_y = 0.0f;
     std::map<SDL_Keycode, int> command_keys; // held ⌘ key -> the F key sent for it
     bool fullscreen = false; // last state asked for or reported by the window
+    // Inside App::tick. A native [dialog] runs its modal loop there, and a
+    // resize or zoom of the window under it makes SDL's live-resize iterate or
+    // the zoom timer fire in that loop. The engine waits for the box instead,
+    // as the Windows engine stands still under its message box.
+    bool ticking = false;
 #if defined(__APPLE__)
     CFRunLoopTimerRef animation_timer = nullptr;
     oa::runtime::AppResult animation_result = oa::runtime::AppResult::Continue;
@@ -80,8 +85,10 @@ void set_fullscreen(HostState* host, bool on)
 void animation_tick(CFRunLoopTimerRef, void* info)
 {
     auto* host = static_cast<HostState*>(info);
-    if (host->animation_result == oa::runtime::AppResult::Continue)
-        host->animation_result = host->app->tick(false);
+    if (host->ticking || host->animation_result != oa::runtime::AppResult::Continue) return;
+    host->ticking = true;
+    host->animation_result = host->app->tick(false);
+    host->ticking = false;
 }
 
 void tick_through_window_animations(HostState* host)
@@ -540,6 +547,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 {
     HostState* host = static_cast<HostState*>(appstate);
     if (!host || !host->app) return SDL_APP_SUCCESS;
+    if (host->ticking) return SDL_APP_CONTINUE;
 
     if (oa::plat::take_lifecycle_resume()) host->app->reset_clock();
 #if defined(OA_DRIVE)
@@ -549,6 +557,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 
     if (host->app->take_fullscreen_toggle()) set_fullscreen(host, !host->fullscreen);
 
+    host->ticking = true;
 #if defined(__APPLE__)
     const oa::runtime::AppResult result = host->animation_result != oa::runtime::AppResult::Continue
                                               ? host->animation_result
@@ -556,6 +565,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
 #else
     const oa::runtime::AppResult result = host->app->tick();
 #endif
+    host->ticking = false;
     switch (result) {
         case oa::runtime::AppResult::Continue:
             touch_flush_release(host);
