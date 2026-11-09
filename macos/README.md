@@ -88,9 +88,10 @@ python3 macos/package_macos.py --game "$G/ハミダシクリエイティブ凸" 
 
 - 只写 `--cn` 时，先找文件名含 cn 或 chs 的 exe（有几个就取最大的），按这个启动器看到的文件挂载：
   它自己的 `<启动器>.pfs.NNN`，EVB 打进 exe 的文件，以及它引用的 EVB 外部包。
-- 没有这样的 exe，就挂文件名含 cn 或 chs 的 `.pfs` 和 `.pfs.NNN`。都没有就报错退出，并列出找过的名字。
-- 第一款的目录里还留着 2022 年的旧补丁（`hamidashi_cn.dll`、`root_cn.pfs`）。因为有
-  `hamidashi_CHS.exe`，自动查找不会用到旧补丁。
+- 没有这样的 exe，就挂文件名含 cn 或 chs、文件头是 pf2、pf6 或 pf8 的 `.pfs` 和 `.pfs.NNN`。
+  文件头不对的跳过。都没有就报错退出，并列出找过的名字。
+- 第一款的目录里还留着 2022 年的旧补丁：`hamidashi_cn.dll` 和 `root_cn.pfs`。`root_cn.pfs` 其实是
+  EVB 包，要配那个 dll 才能用，文件头不是 PFS，所以就算没有 `hamidashi_CHS.exe`，自动查找也不会挂它。
 - `--cn PATH` 给的是 exe 时，按启动器处理。给的是 EVB 外部包时，解出后挂载；外部包按文件头识别，
   不看扩展名，第一款的 `root_cn.pfs` 就是一个外部包。给的是 pfs 或目录时，直接挂上。
 - 补丁不是 exe 时，挂在基础包上面，替代原版启动器自己的包。
@@ -109,7 +110,8 @@ python3 macos/package_macos.py --game "$G/ハミダシクリエイティブ凸" 
 
 - 脚本只解一次，放到 `~/Library/Application Support/Madosoft Artemis/<数据目录>/evb/`，第一款约
   215 MB，不写进游戏目录。补丁文件换了，或者换了补丁，会删掉重解。
-- app 运行时读这个目录。重新打包或重装前，先退出正在运行的 app。
+- app 运行时读这个目录。要删掉重解的目录正被运行中的 app 读着，或者要替换的 app 正在运行时，
+  脚本会停下，提示先退出游戏。是否在运行，按正在运行的 app 可执行文件路径判断。
 - 启动器引用的 EVB 包不存在，或者文件头不是 EVB 时，脚本报出包的路径并退出。
 - 签名前，脚本用 `otool -L` 检查复制进 app 的播放器。只要链接了系统库以外的库，例如
   `/opt/homebrew` 里的，就报错停止。
@@ -217,6 +219,9 @@ OA_AUDIO_MIXDIAG=1 OA_SAVE_ROOT=/tmp/save OA_DRIVE_SCRIPT=play.drv \
 - `--cn PATH` 测了五种：启动器 exe（`hamidashi_CHS.exe`）、EVB 外部包（`HappyBirthday.MrXiao`、
   `root_cn.pfs`）、打包了文件的 EVB exe（`hamidashi.exe`）、pfs（`hamidashitotsu_chs.pfs.025`）、目录。
   `hamidashi_CHS.exe`、`HappyBirthday.MrXiao` 和 pfs 的结果与自动查找一致；
+- 自动查找的回退：/tmp 下的假游戏目录里只有文件头是 EVB 的 `*_cn.pfs` 时，`--cn` 报错；
+  换成文件头是 pf8 的 `*_cn.pfs`，就挂上了。这个包不带标题，所以加了 `--name`；
+- 运行中检查：/tmp 下的 app 副本运行时，重解它读着的 EVB 目录、替换它，都会停下并提示先退出游戏；
 - 出错的情况：/tmp 下没有补丁的假游戏目录用 `--cn` 时报错，并列出找过的名字；没有原版启动器、
   补丁类型不认识、路径不存在、补丁版名字和原版相同，都报错退出。
 

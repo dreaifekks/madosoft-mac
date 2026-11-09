@@ -17,7 +17,8 @@ What the app mounts, lowest priority first:
      extracted once with evbunpack into the Application Support folder (never into the game directory).
 The original uses the largest exe without cn or chs in its name and leaves out 3: Enigma Virtual Box exes come
 from patches (ハミダシクリエイティブ's hamidashi.exe is one; its untouched exe is plain). --cn uses the exe with
-cn or chs in its name, else the packs named so. A --cn PATCH that is not an exe takes the place of 2 and 3.
+cn or chs in its name, else the PFS packs named so. A --cn PATCH that is not an exe takes the place of 2 and 3.
+Packaging stops while the app it would replace, or an app reading the EVB folder it would extract again, runs.
 """
 import argparse
 import json
@@ -39,6 +40,7 @@ SUPPORT = Path.home() / 'Library/Application Support/Madosoft Artemis'
 SYSTEM_LIBRARIES = ('/usr/lib/', '/System/Library/')
 CHINESE = re.compile(r'cn|chs', re.IGNORECASE)
 PACK = re.compile(r'\.pfs(\.\d{3})?$', re.IGNORECASE)
+EVB, PFS = b'EVB\0', (b'pf2', b'pf6', b'pf8')
 RT_ICON, RT_GROUP_ICON, RT_VERSION = 3, 14, 16
 
 
@@ -160,15 +162,21 @@ def evb_sources(exe, pe):
         package = exe.parent / m.group(1).decode('utf-16le')
         if not package.is_file():
             raise SystemExit(f'{exe.name} maps in {package}, which is missing')
-        if not is_evb_package(package):
+        if magic(package) != EVB:
             raise SystemExit(f'{package}: not an Enigma Virtual Box package (no EVB header)')
         sources.append(package)
     return sources
 
 
-def is_evb_package(path):
+def magic(path):
     with path.open('rb') as f:
-        return f.read(4) == b'EVB\0'
+        return f.read(4)
+
+
+def running_apps():
+    """App bundles whose openartemis is running, found by the executable's path."""
+    lines = subprocess.run(['ps', '-axo', 'comm='], capture_output=True, text=True, check=True).stdout.splitlines()
+    return {Path(line).parents[2].resolve() for line in lines if line.endswith('.app/Contents/MacOS/openartemis')}
 
 
 def extract_evb(sources, target, evbunpack):
@@ -179,6 +187,11 @@ def extract_evb(sources, target, evbunpack):
         if not shutil.which(evbunpack):
             raise SystemExit(f'{sources[0].name} is packed with Enigma Virtual Box; install evbunpack '
                              '(https://github.com/mos9527/evbunpack) or pass --evbunpack PATH')
+        users = [str(a) for a in running_apps()
+                 if str(target) in (a / 'Contents/Resources/game.conf').read_text('utf-8')]
+        if users:
+            raise SystemExit(f'{", ".join(users)} is running and reads {target}, which packaging would extract '
+                             'again; quit the game first')
         shutil.rmtree(target, ignore_errors=True)
         for p in sources:
             run(evbunpack, '--ignore-pe', p, target, stdout=subprocess.DEVNULL)
@@ -201,14 +214,15 @@ def launcher_overlays(exe, base, support, evbunpack):
 
 
 def find_patch(game):
-    """--cn without PATH: the launcher with cn or chs in its name, else the packs named so."""
+    """--cn without PATH: the launcher with cn or chs in its name, else the PFS packs named so. Packs with
+    another header are left out: ハミダシクリエイティブ's root_cn.pfs is an EVB package that needs its dll."""
     if exe := launcher(game, chinese=True):
         return [exe]
     packs = sorted(p for p in game.iterdir() if p.is_file() and PACK.search(p.name) and CHINESE.search(p.name)
-                   and not p.name.startswith('._'))
+                   and not p.name.startswith('._') and magic(p)[:3] in PFS)
     if not packs:
-        raise SystemExit(f'{game}: no Chinese patch; looked for *cn*.exe, *chs*.exe, *cn*.pfs, *chs*.pfs, '
-                         '*cn*.pfs.NNN and *chs*.pfs.NNN')
+        raise SystemExit(f'{game}: no Chinese patch; looked for *cn*.exe and *chs*.exe, then for *cn*.pfs, *chs*.pfs, '
+                         '*cn*.pfs.NNN and *chs*.pfs.NNN with a pf2, pf6 or pf8 header')
     return packs
 
 
@@ -220,7 +234,7 @@ def patch_overlays(patch, base, support, evbunpack):
         return launcher_overlays(patch, base, support, evbunpack)
     if patch.is_dir():
         return [patch], None
-    if is_evb_package(patch):  # whatever its name: ハミダシクリエイティブ's root_cn.pfs is one
+    if magic(patch) == EVB:  # whatever its name: ハミダシクリエイティブ's root_cn.pfs is one
         return extract_evb([patch], support / 'evb', evbunpack), None
     if PACK.search(patch.name):
         return [patch], None
@@ -360,6 +374,9 @@ def main():
     dist = ROOT / 'build/distribution'
     work = ROOT / 'build/macos-package'
     app = dist / (name + '.app')
+    final = args.install.resolve() / app.name if args.install else app
+    if busy := sorted(str(a) for a in running_apps() & {app, final}):
+        raise SystemExit(f'{", ".join(busy)} is running and packaging would replace it; quit the game first')
     for stale in [app, work]:
         shutil.rmtree(stale, ignore_errors=True)
     work.mkdir(parents=True)
@@ -387,10 +404,8 @@ def main():
     run('codesign', '--force', '--sign', identity, app)
     run('codesign', '--verify', '--strict', app)
 
-    final = app
     if args.install:
         args.install.mkdir(parents=True, exist_ok=True)
-        final = args.install / app.name
         if final.exists():
             shutil.rmtree(final)
         run('ditto', app, final)
