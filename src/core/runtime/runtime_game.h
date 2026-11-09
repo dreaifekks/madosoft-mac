@@ -89,6 +89,8 @@ public:
     /// The window's close button: true when the game registered
     /// [setonwindowbutton button=0] — its handler runs next tick and the game
     /// asks, saves and [exit]s itself; false = nothing to run, the host quits.
+    /// While an in-game dialog waits for its answer or a movie plays, the
+    /// handler waits too; requests made meanwhile join the waiting one.
     bool window_close();
     bool exit_requested() const;
     /// Host events since the last drain; scene/text/media events never appear.

@@ -134,6 +134,10 @@ struct GameRuntime::RuntimeState {
     void mouse_wheel(int direction);
     bool window_close();
     bool window_close_pending_ = false; // dispatched with the push rows
+    bool window_close_running_ = false; // dispatched; its queued tags have not drained
+    /// A park that holds the queue the close flow would run in: a queue-armed
+    /// click park (an in-game dialog waiting for its answer) or a movie.
+    bool close_held_by_park() const;
     void tick_input(uint64_t delta_ms);
     void finish_frame();
     std::vector<oa::runtime::Event> drain_events() {

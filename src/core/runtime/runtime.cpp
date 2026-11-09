@@ -2087,12 +2087,20 @@ GameRuntime::RuntimeState::PointerConsumption GameRuntime::RuntimeState::process
         if (cancel_park) pc.role_advance = true;
     }
     // The window's close button runs [setonwindowbutton button=0] like a key
-    // row, as the native engine does: the game asks, saves and [exit]s.
-    if (window_close_pending_) {
+    // row, as the native engine does: the game asks, saves and [exit]s. Its
+    // handler stops all keys at once and queues the question, so the request
+    // waits while a park holds that queue; else the in-game dialog under it
+    // could no longer be answered and the question would never come.
+    if (window_close_running_ && !interpreter_->has_queued_tags())
+        window_close_running_ = false;
+    if (window_close_pending_ && !close_held_by_park()) {
         window_close_pending_ = false;
-        if (const auto* row = scene().get_input_handler("windowbutton", "0"))
+        if (const auto* row = scene().get_input_handler("windowbutton", "0")) {
+            bool queued = false;
             dispatch_input_row("setonwindowbutton", *row, {{"button", "0"}},
-                               PointerDispatch::Kind::Push);
+                               PointerDispatch::Kind::Push, &queued);
+            window_close_running_ = queued;
+        }
     }
     return pc;
 }
@@ -2848,8 +2856,21 @@ void GameRuntime::RuntimeState::mouse_wheel(int direction)
 bool GameRuntime::RuntimeState::window_close()
 {
     if (!scene().get_input_handler("windowbutton", "0")) return false;
-    window_close_pending_ = true;
+    // One close flow at a time: a request made while one waits or runs joins it.
+    if (!window_close_running_) window_close_pending_ = true;
     return true;
+}
+
+bool GameRuntime::RuntimeState::close_held_by_park() const
+{
+    if (!wait_) return false;
+    if (wait_->waiting_click() && interpreter_->last_wait_from_queue()) return true;
+    if (wait_->stage == oa::runtime::Wait::Stage::VideoLayer) return true;
+    if (wait_->stage == oa::runtime::Wait::Stage::Video) {
+        const auto v = media_.video_.state();
+        return v.overlay_video && v.overlay_video->playing;
+    }
+    return false;
 }
 
 void GameRuntime::RuntimeState::finish_frame()
