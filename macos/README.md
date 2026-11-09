@@ -91,7 +91,7 @@ python3 macos/package_macos.py --game "$G/ハミダシクリエイティブ凸" 
 - 没有这样的 exe，就挂文件名含 cn 或 chs、文件头是 pf2、pf6 或 pf8 的 `.pfs` 和 `.pfs.NNN`。
   文件头不对的跳过。都没有就报错退出，并列出找过的名字。
 - 第一款的目录里还留着 2022 年的旧补丁：`hamidashi_cn.dll` 和 `root_cn.pfs`。`root_cn.pfs` 其实是
-  EVB 包，要配那个 dll 才能用，文件头不是 PFS，所以就算没有 `hamidashi_CHS.exe`，自动查找也不会挂它。
+  EVB 包，文件头不是 PFS，所以就算没有 `hamidashi_CHS.exe`，自动查找也不会挂它。它是否离不开那个 dll 还没验证。
 - `--cn PATH` 给的是 exe 时，按启动器处理。给的是 EVB 外部包时，解出后挂载；外部包按文件头识别，
   不看扩展名，第一款的 `root_cn.pfs` 就是一个外部包。给的是 pfs 或目录时，直接挂上。
 - 补丁不是 exe 时，挂在基础包上面，替代原版启动器自己的包。

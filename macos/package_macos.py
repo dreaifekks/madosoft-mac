@@ -215,7 +215,7 @@ def launcher_overlays(exe, base, support, evbunpack):
 
 def find_patch(game):
     """--cn without PATH: the launcher with cn or chs in its name, else the PFS packs named so. Packs with
-    another header are left out: ハミダシクリエイティブ's root_cn.pfs is an EVB package that needs its dll."""
+    another header are left out, such as ハミダシクリエイティブ's root_cn.pfs, which is an EVB package."""
     if exe := launcher(game, chinese=True):
         return [exe]
     packs = sorted(p for p in game.iterdir() if p.is_file() and PACK.search(p.name) and CHINESE.search(p.name)
