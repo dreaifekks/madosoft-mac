@@ -1,16 +1,23 @@
 """Build a self-contained arm64 macOS app for one Artemis game, with no game data.
 
-  python3 macos/package_macos.py --game DIR
+  python3 macos/package_macos.py --game DIR               # the original
+  python3 macos/package_macos.py --game DIR --cn          # with the Chinese patch found in DIR
+  python3 macos/package_macos.py --game DIR --cn PATCH    # with PATCH: a launcher exe, an Enigma Virtual Box
+                                                          # package, a pfs or a directory
   python3 macos/package_macos.py --game DIR --sign "Developer ID Application: You (TEAM)" --install
 
 The app only records where the game is. It runs the original scripts and assets from the game directory
-with the openartemis runtime bundled inside. Saves go to ~/Library/Application Support/Madosoft Artemis/<game>/.
+with the openartemis runtime bundled inside. Saves go to ~/Library/Application Support/Madosoft Artemis/<game>/,
+<game>-ja for the original, so the original and the patched app live side by side.
 
-What it mounts, lowest priority first:
+What the app mounts, lowest priority first:
   1. the base pack (root.pfs or <exe>.pfs) and its numbered parts, plus loose files in the game directory;
-  2. the launcher's own numbered patch packs (<launcher>.pfs.NNN, e.g. a Chinese patch);
-  3. files an Enigma Virtual Box launcher maps from its external package, extracted once with evbunpack
-     into the Application Support folder (never into the game directory).
+  2. the launcher's own numbered packs (<launcher>.pfs.NNN);
+  3. with --cn, the files an Enigma Virtual Box launcher maps in, from the exe itself or its external package,
+     extracted once with evbunpack into the Application Support folder (never into the game directory).
+The original uses the largest exe without cn or chs in its name and leaves out 3: Enigma Virtual Box exes come
+from patches (ハミダシクリエイティブ's hamidashi.exe is one; its untouched exe is plain). --cn uses the exe with
+cn or chs in its name, else the packs named so. A --cn PATCH that is not an exe takes the place of 2 and 3.
 """
 import argparse
 import json
@@ -30,6 +37,8 @@ from pfs import Pfs  # noqa: E402
 
 SUPPORT = Path.home() / 'Library/Application Support/Madosoft Artemis'
 SYSTEM_LIBRARIES = ('/usr/lib/', '/System/Library/')
+CHINESE = re.compile(r'cn|chs', re.IGNORECASE)
+PACK = re.compile(r'\.pfs(\.\d{3})?$', re.IGNORECASE)
 RT_ICON, RT_GROUP_ICON, RT_VERSION = 3, 14, 16
 
 
@@ -48,10 +57,12 @@ class Pe:
         count, optional = struct.unpack_from('<H', data, pe + 6)[0], struct.unpack_from('<H', data, pe + 20)[0]
         magic = struct.unpack_from('<H', data, pe + 24)[0]
         directories = pe + 24 + (112 if magic == 0x20b else 96)
-        self.sections = []
+        self.sections, self.names = [], []
         for n in range(count):
-            size, rva, raw_size, raw = struct.unpack_from('<IIII', data, pe + 24 + optional + 40 * n + 8)
+            header = pe + 24 + optional + 40 * n
+            size, rva, raw_size, raw = struct.unpack_from('<IIII', data, header + 8)
             self.sections.append((rva, max(size, raw_size), raw))
+            self.names.append(data[header:header + 8].rstrip(b'\0').decode('latin-1'))
         rsrc = struct.unpack_from('<I', data, directories + 2 * 8)[0]
         self.root = self.offset(rsrc) if rsrc else None
 
@@ -125,54 +136,95 @@ def numbered(folder, stem):
     return [p for _, p in sorted(found)]
 
 
-def launcher(game):
-    """The exe the game is started with: a *_chs launcher when there is one, else the largest exe."""
-    exes = [p for p in game.iterdir() if p.is_file() and p.suffix.lower() == '.exe' and not p.name.startswith('._')]
-    chs = [p for p in exes if p.stem.lower().endswith('_chs')]
-    if chs:
-        return chs[0]
+def launcher(folder, chinese):
+    """The largest exe with (chinese) or without cn or chs in its name."""
+    exes = [p for p in folder.iterdir() if p.is_file() and p.suffix.lower() == '.exe' and not p.name.startswith('._')
+            and bool(CHINESE.search(p.stem)) == chinese]
     return max(exes, key=lambda p: p.stat().st_size, default=None)
 
 
 def base_pack(game, exe):
-    stems = ['root']
-    if exe:
-        stems += [exe.stem, re.sub(r'_chs$', '', exe.stem, flags=re.IGNORECASE)]
-    for stem in stems:
+    for stem in ['root', exe.stem]:
         pack = find_ci(game, stem + '.pfs')
         if pack:
             return pack
-    raise SystemExit(f'{game}: no root.pfs or <exe>.pfs, so this is not an Artemis game directory')
+    raise SystemExit(f'{game}: no root.pfs or {exe.stem}.pfs, so this is not an Artemis game directory')
 
 
-def evb_package(exe):
-    """The external package an Enigma Virtual Box launcher maps in, if any."""
-    data = exe.read_bytes()
+def evb_sources(exe, pe):
+    """What an Enigma Virtual Box launcher maps in: the files packed into the exe, then its external package."""
+    sources = [exe] if '.enigma1' in pe.names else []
     # UTF-16 name, ended by NULs or straight by the virtual file system header.
-    m = re.search(re.escape('%DEFAULT FOLDER%\\'.encode('utf-16le')) + rb'((?:..)+?)(?=\0\0|EVB\0)', data, re.DOTALL)
-    if not m:
-        return None
-    package = exe.parent / m.group(1).decode('utf-16le')
-    if not package.is_file():
-        raise SystemExit(f'{exe.name} maps in {package}, which is missing')
-    with package.open('rb') as f:
-        if f.read(4) != b'EVB\0':
+    m = re.search(re.escape('%DEFAULT FOLDER%\\'.encode('utf-16le')) + rb'((?:..)+?)(?=\0\0|EVB\0)', pe.data, re.DOTALL)
+    if m:
+        package = exe.parent / m.group(1).decode('utf-16le')
+        if not package.is_file():
+            raise SystemExit(f'{exe.name} maps in {package}, which is missing')
+        if not is_evb_package(package):
             raise SystemExit(f'{package}: not an Enigma Virtual Box package (no EVB header)')
-    return package
+        sources.append(package)
+    return sources
 
 
-def extract_evb(package, target, evbunpack):
-    """Extract once; a stamp records which package (size, mtime) the folder came from."""
+def is_evb_package(path):
+    with path.open('rb') as f:
+        return f.read(4) == b'EVB\0'
+
+
+def extract_evb(sources, target, evbunpack):
+    """Extract once into target; returns its packs, then target. A stamp records the sources (size, mtime)."""
     stamp = target / '.source'
-    source = f'{package}\n{package.stat().st_size}\n{int(package.stat().st_mtime)}\n'
-    if stamp.is_file() and stamp.read_text(encoding='utf-8') == source:
-        return
-    if not shutil.which(evbunpack):
-        raise SystemExit(f'{package.name} is an Enigma Virtual Box package; install evbunpack '
-                         '(https://github.com/mos9527/evbunpack) or pass --evbunpack PATH')
-    shutil.rmtree(target, ignore_errors=True)
-    run(evbunpack, '--ignore-pe', package, target, stdout=subprocess.DEVNULL)
-    stamp.write_text(source, encoding='utf-8')
+    source = ''.join(f'{p}\n{p.stat().st_size}\n{int(p.stat().st_mtime)}\n' for p in sources)
+    if not (stamp.is_file() and stamp.read_text(encoding='utf-8') == source):
+        if not shutil.which(evbunpack):
+            raise SystemExit(f'{sources[0].name} is packed with Enigma Virtual Box; install evbunpack '
+                             '(https://github.com/mos9527/evbunpack) or pass --evbunpack PATH')
+        shutil.rmtree(target, ignore_errors=True)
+        for p in sources:
+            run(evbunpack, '--ignore-pe', p, target, stdout=subprocess.DEVNULL)
+        stamp.write_text(source, encoding='utf-8')
+    return [p for p in sorted(target.iterdir()) if PACK.search(p.name)] + [target]
+
+
+def own_packs(exe, base):
+    """<launcher>.pfs.NNN; the base pack's own parts load with it."""
+    return numbered(exe.parent, exe.stem + '.pfs') if exe.stem.lower() != base.stem.lower() else []
+
+
+def launcher_overlays(exe, base, support, evbunpack):
+    """What a patch launcher mounts over the base pack, and its PE (for the name and icon)."""
+    pe = Pe(exe.read_bytes())
+    overlays = own_packs(exe, base)
+    if sources := evb_sources(exe, pe):
+        overlays += extract_evb(sources, support / 'evb', evbunpack)
+    return overlays, pe
+
+
+def find_patch(game):
+    """--cn without PATH: the launcher with cn or chs in its name, else the packs named so."""
+    if exe := launcher(game, chinese=True):
+        return [exe]
+    packs = sorted(p for p in game.iterdir() if p.is_file() and PACK.search(p.name) and CHINESE.search(p.name)
+                   and not p.name.startswith('._'))
+    if not packs:
+        raise SystemExit(f'{game}: no Chinese patch; looked for *cn*.exe, *chs*.exe, *cn*.pfs, *chs*.pfs, '
+                         '*cn*.pfs.NNN and *chs*.pfs.NNN')
+    return packs
+
+
+def patch_overlays(patch, base, support, evbunpack):
+    """--cn: a launcher exe, an Enigma Virtual Box package, a pfs or a directory; plus the launcher's PE."""
+    if not patch.exists():
+        raise SystemExit(f'{patch}: no such file or directory')
+    if patch.suffix.lower() == '.exe':
+        return launcher_overlays(patch, base, support, evbunpack)
+    if patch.is_dir():
+        return [patch], None
+    if is_evb_package(patch):  # whatever its name: ハミダシクリエイティブ's root_cn.pfs is one
+        return extract_evb([patch], support / 'evb', evbunpack), None
+    if PACK.search(patch.name):
+        return [patch], None
+    raise SystemExit(f'{patch}: not a launcher exe, an Enigma Virtual Box package, a pfs or a directory')
 
 
 def game_title(packs):
@@ -188,6 +240,11 @@ def game_title(packs):
         if m:
             return re.sub(r'^【[^】]*】', '', m.group(1)).strip()
     return None
+
+
+def app_name(game, base, pe, overlays):
+    """The exe's version info, else the game's window title, else the folder name."""
+    return version_name(pe) or game_title([base] + numbered(game, base.name) + overlays) or game.name
 
 
 # ---------------------------------------------------------------- app
@@ -253,6 +310,10 @@ def xml_escape(text):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--game', type=Path, required=True, help='game directory the app opens')
+    parser.add_argument('--cn', nargs='?', const=True, type=Path, metavar='PATH',
+                        help='mount a Chinese patch: PATH (a launcher exe, an Enigma Virtual Box package, a pfs or a '
+                             'directory); without PATH, the launcher in the game directory with cn or chs in its name, '
+                             'else the packs named so')
     parser.add_argument('--name', help='app name; defaults to the exe version info, else the game\'s window title')
     parser.add_argument('--icon', type=Path, help='icon image or .icns; defaults to the largest icon in the launcher exe')
     parser.add_argument('--sign', default='auto', metavar='IDENTITY',
@@ -274,21 +335,25 @@ def main():
     if not binary.is_file():
         raise SystemExit(f'{binary}: build it first (cmake --preset macos-arm64 && cmake --build --preset macos-arm64)')
 
-    exe = launcher(game)
+    exe = launcher(game, chinese=False)
+    if exe is None:
+        raise SystemExit(f'{game}: no launcher (an exe without cn or chs in its name)')
     base = base_pack(game, exe)
-    slug = re.sub(r'[^a-z0-9]+', '-', base.stem.lower() if base.stem.lower() != 'root' else
-                  re.sub(r'_chs$', '', exe.stem, flags=re.IGNORECASE).lower()).strip('-')
+    patches = [] if args.cn is None else find_patch(game) if args.cn is True else [args.cn.expanduser().resolve()]
+    slug = re.sub(r'[^a-z0-9]+', '-', (exe.stem if base.stem.lower() == 'root' else base.stem).lower()).strip('-')
+    slug += '' if patches else '-ja'
     support = SUPPORT / slug
-    overlays = numbered(game, exe.name[:-4] + '.pfs') if exe and exe.stem.lower() != base.stem.lower() else []
-    package = evb_package(exe) if exe else None
-    if package:
-        evb = support / 'evb'
-        extract_evb(package, evb, args.evbunpack)
-        overlays += [p for p in sorted(evb.iterdir()) if re.search(r'\.pfs(\.\d{3})?$', p.name, re.IGNORECASE)]
-        overlays.append(evb)
-
-    pe = Pe(exe.read_bytes()) if exe else None
-    name = args.name or (pe and version_name(pe)) or game_title([base] + numbered(game, base.name) + overlays) or game.name
+    pe, overlays = Pe(exe.read_bytes()), own_packs(exe, base)
+    original = app_name(game, base, pe, overlays)
+    name = args.name or original
+    if patches:
+        overlays = []
+        for patch in patches:
+            more, patch_pe = patch_overlays(patch, base, support, args.evbunpack)
+            overlays, pe = overlays + more, patch_pe or pe
+        name = args.name or app_name(game, base, pe, overlays)
+        if name == original:
+            raise SystemExit(f'{name}: the patched app would take the original\'s name and replace it; pass --name')
     if '/' in name or ':' in name:
         raise SystemExit(f'{name}: an app name cannot hold / or :')
 
@@ -299,7 +364,7 @@ def main():
         shutil.rmtree(stale, ignore_errors=True)
     work.mkdir(parents=True)
     icon = args.icon
-    if icon is None and pe and (ico := largest_icon(pe)):
+    if icon is None and (ico := largest_icon(pe)):
         icon = work / 'game.ico'
         icon.write_bytes(ico)
 
@@ -329,8 +394,9 @@ def main():
         if final.exists():
             shutil.rmtree(final)
         run('ditto', app, final)
-    print(json.dumps({'app': str(final), 'name': name, 'game': str(game), 'launcher': exe.name if exe else None,
-                      'project': str(base), 'overlays': [str(o) for o in overlays], 'saves': str(support / 'save'),
+    print(json.dumps({'app': str(final), 'name': name, 'game': str(game), 'launcher': exe.name,
+                      'patch': [str(p) for p in patches], 'project': str(base),
+                      'overlays': [str(o) for o in overlays], 'saves': str(support / 'save'),
                       'identifier': identifier, 'signed_by': identity}, ensure_ascii=False, indent=2))
 
 
