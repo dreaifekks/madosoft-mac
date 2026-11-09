@@ -3080,7 +3080,17 @@ bool App::Impl::boot()
 
     rt = std::make_shared<GameRuntime>(fs);
     rt->enable_decode_pool();
-    rt->set_dialog_host(cfg.dialog);
+    if (cfg.dialog) {
+        // The host's box is modal and blocks this tick. Restart the frame clock
+        // when it returns, so the next frame does not make up the time spent
+        // answering (auto mode, fades and the mixer would jump ahead).
+        rt->set_dialog_host([this](const std::string& title, const std::string& message,
+                                   bool yes_no) {
+            const int answer = cfg.dialog(title, message, yes_no);
+            reset_clock();
+            return answer;
+        });
+    }
 
     if (!cfg.save_root.empty()) {
         auto store = std::make_shared<oa::runtime::DirSaveStore>(cfg.save_root);
