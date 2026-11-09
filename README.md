@@ -1,13 +1,13 @@
 # madosoft-mac
 
 openartemis 的 macOS（Apple Silicon）分支：把まどそふと的《ハミダシクリエイティブ》和
-《ハミダシクリエイティブ凸》连同中文补丁，各打成一个双击即玩的 .app。游戏数据从用户自己的
-游戏目录只读加载，仓库不含任何游戏资产。
+《ハミダシクリエイティブ凸》各打成一个双击即玩的 .app。游戏数据从用户自己的游戏目录只读加载，
+仓库不含任何游戏资产。
 
-- 引擎：[luxiaoling-mc/openartemis](https://github.com/luxiaoling-mc/openartemis)，
-  MIT 或 GPL-3.0-or-later 双许可，本分支基于上游 `65725c3`。
-- 补丁解包：第一款中文补丁的 Enigma Virtual Box 包在打包时用
+- 引擎：[luxiaoling-mc/openartemis](https://github.com/luxiaoling-mc/openartemis)，本分支基于上游 `65725c3`。
+- 解包：用 Enigma Virtual Box 打包的启动器或补丁，在打包时用
   [mos9527/evbunpack](https://github.com/mos9527/evbunpack)（Apache-2.0）解出，不进 app。
+- 许可证：MIT，见 `LICENSE`。上游 openartemis 是 MIT 与 GPL-3.0-or-later 二选一，本仓库选 MIT。
 - 构建、打包、实测范围和已知缺口见 [macos/README.md](macos/README.md)；
   链接的库及其许可证见 [THIRD_PARTY.md](THIRD_PARTY.md)。
 
@@ -78,11 +78,8 @@ python web\serve.py <目录> 8080      # 浏览器打开 http://localhost:8080/i
 
 ## 许可
 
-本项目采用 **MIT 或 GPL-3.0-or-later 二选一** 双许可
-（`SPDX-License-Identifier: MIT OR GPL-3.0-or-later`），Copyright (c) 2026 deepseek：
-
-- 选用 **MIT**：见 `LICENSE` 的 ALTERNATIVE A；
-- 选用 **GNU GPL v3 或更高版本**：见 `LICENSE` 的 ALTERNATIVE B。
+上游 openartemis 采用 **MIT 或 GPL-3.0-or-later 二选一** 双许可，Copyright (c) 2026 deepseek。
+本仓库选用 **MIT** 发布，全文见 `LICENSE`。
 
 代码不含任何游戏资产；`third_party/`（如 Lua 5.1.5）与 vcpkg 依赖仍分别遵循
 各自的原始许可。

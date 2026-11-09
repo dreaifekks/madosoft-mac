@@ -2,16 +2,17 @@
 
 This repository is a fork of openartemis. The `macos-madosoft` branch adds a
 macOS (Apple Silicon) host and one-command packaging of one `.app` per game for
-two まどそふと titles, ハミダシクリエイティブ and ハミダシクリエイティブ凸, with
-their Chinese patches. It keeps openartemis's dual license, MIT OR
-GPL-3.0-or-later (full text in `LICENSE`), and the code added on this branch is
-offered under the same terms. Game data, files extracted from the patches and
-game icons are not part of the repository.
+two まどそふと titles, ハミダシクリエイティブ and ハミダシクリエイティブ凸.
+openartemis is offered under MIT OR GPL-3.0-or-later; this repository takes the
+MIT option, and the whole repository, including the code added on this branch,
+is released under the MIT License in `LICENSE`. Game data, files extracted from
+game launchers or patches, and game icons are not part of the repository.
 
 ## openartemis
 
 - Project: https://github.com/luxiaoling-mc/openartemis
-- Copyright (c) 2026 deepseek. License: MIT OR GPL-3.0-or-later, see `LICENSE`.
+- Copyright (c) 2026 deepseek. License: MIT OR GPL-3.0-or-later; used here
+  under MIT.
 - Base: upstream commit `65725c3` (2026-11-05).
 - The engine is upstream's: PFS reading, the IET/AST script interpreter and its
   Lua 5.1 bridge, layers, text, audio, video and saves. This branch changes or
@@ -26,7 +27,8 @@ game icons are not part of the repository.
     `src/app/platform/*` (save root under Application Support);
   - scripted test host: `src/app/drive.*`;
   - packaging and docs: `macos/package_macos.py`, `macos/README.md`,
-    `docs/TESTING.md`, `README.md`, this file.
+    `docs/TESTING.md`, `README.md`, this file;
+  - license: `LICENSE` keeps only the MIT text, with upstream's copyright line.
 - Upstream vendors Lua 5.1.5 in `third_party/lua-5.1.5` (MIT, Lua.org,
   PUC-Rio; notice in `third_party/lua-5.1.5/COPYRIGHT`). Upstream's Android
   launcher and web shell are adapted from krkrsdl3, as `docs/PLATFORMS.md`
@@ -37,10 +39,9 @@ game icons are not part of the repository.
 - Project: https://github.com/mos9527/evbunpack, by mos9527.
 - License: Apache-2.0.
 - `macos/package_macos.py` runs it as an external command, at packaging time
-  only, to extract the files an Enigma Virtual Box launcher maps from its
-  external package (the Chinese patch of ハミダシクリエイティブ). It is not
-  vendored, linked or copied into the app; install it separately, as
-  `macos/README.md` shows.
+  only, to extract the files a launcher or patch packed with Enigma Virtual Box
+  maps into the game. It is not vendored, linked or copied into the app;
+  install it separately, as `macos/README.md` shows.
 
 ## Libraries linked into the macOS player
 
@@ -69,7 +70,6 @@ these licenses, in particular the LGPL terms for FFmpeg linked statically.
 ## Games
 
 The packaging and the tested scope in `macos/README.md` concern the user's own
-copies of ハミダシクリエイティブ and ハミダシクリエイティブ凸 (まどそふと) with
-their Chinese patches; the 凸 patch is by 白井木学园汉化组. The apps read those
-files in place and never write to the game folders. Apps built with a game's
-icon are for local use and should not be distributed.
+copies of ハミダシクリエイティブ and ハミダシクリエイティブ凸 (まどそふと). The apps
+read those files in place and never write to the game folders. Apps built with
+a game's icon are for local use and should not be distributed.
